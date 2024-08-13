@@ -1,0 +1,15 @@
+[package]
+name = "pear-reviewer"
+license = "Apache-2.0"
+repository = "https://github.com/sapcc/pear-reviewer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "^1"
+clap = { version = "^4", features = ["derive", "env"] }
+git2 = "^0"
+octocrab = "^0"
+serde = "^1"
+serde_yml = "^0"
+tokio = { version = "^1", features = ["macros", "rt-multi-thread"] }
