@@ -6,25 +6,11 @@ name: Checks
   pull_request:
     branches:
       - '*'
-
-# https://github.com/rustsec/audit-check#granular-permissions
-github-token:
-  action-input:
-    input: token
-    is-default: false
-  permissions:
-    issues: write
-    issues-reason: to create issues
-    checks: write
-    checks-reason: to create check
-
 permissions:
   checks: write
   contents: read
-
 env:
   RUSTFLAGS: "-Dwarnings"
-
 jobs:
   checks:
     name: Checks
