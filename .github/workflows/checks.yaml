@@ -22,12 +22,8 @@ jobs:
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
-      # - name: Dependency Licenses Review
-      #   run: make check-dependency-licenses
-      - name: Run cargo audit
-        uses: rustsec/audit-check@v1.4.1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Dependency Licenses Review
+        run: cargo deny check
       # https://doc.rust-lang.org/stable/clippy/continuous_integration/github_actions.html
       - name: Run Clippy
         run: cargo clippy --all-targets --all-features

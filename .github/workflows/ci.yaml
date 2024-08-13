@@ -22,7 +22,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Build all binaries
-        run: cargo build --locked
+        run: cargo build --locked --all-features
 
   test:
     name: Test

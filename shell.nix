@@ -5,7 +5,7 @@ with pkgs;
 mkShell {
   nativeBuildInputs = [
     cargo
-    cargo-audit
+    cargo-deny
     clippy
     pkg-config
     rustc
