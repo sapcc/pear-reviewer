@@ -1,0 +1,19 @@
+{
+  "extends": [
+    "config:recommended",
+    "default:pinDigestsDisabled",
+    "mergeConfidence:all-badges",
+    "docker:disable"
+  ],
+  "assignees": [
+    "SuperSandro2000"
+  ],
+  "commitMessageAction": "Renovate: Update",
+  "dependencyDashboardOSVVulnerabilitySummary": "all",
+  "osvVulnerabilityAlerts": true,
+  "prHourlyLimit": 0,
+  "schedule": [
+    "before 8am on Friday"
+  ],
+  "semanticCommits": "disabled"
+}
