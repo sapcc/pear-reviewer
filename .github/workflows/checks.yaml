@@ -1,0 +1,58 @@
+name: Checks
+"on":
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - '*'
+
+# https://github.com/rustsec/audit-check#granular-permissions
+github-token:
+  action-input:
+    input: token
+    is-default: false
+  permissions:
+    issues: write
+    issues-reason: to create issues
+    checks: write
+    checks-reason: to create check
+
+permissions:
+  checks: write
+  contents: read
+
+env:
+  RUSTFLAGS: "-Dwarnings"
+
+jobs:
+  checks:
+    name: Checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+      - uses: actions-rs/toolchain@v1
+        with:
+          components: clippy
+          toolchain: stable
+      - uses: Swatinem/rust-cache@v1
+      # - name: Dependency Licenses Review
+      #   run: make check-dependency-licenses
+      - name: Run cargo audit
+        uses: rustsec/audit-check@v1.4.1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      # https://doc.rust-lang.org/stable/clippy/continuous_integration/github_actions.html
+      - name: Run Clippy
+        run: cargo clippy --all-targets --all-features
+      - name: Check for spelling errors
+        uses: reviewdog/action-misspell@v1
+        with:
+          exclude: ./vendor/*
+          fail_on_error: true
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          ignore: importas
+          reporter: github-check
+      # - name: Check if source code files have license header
+      #   run: make check-license-headers
