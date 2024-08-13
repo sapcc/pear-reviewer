@@ -22,9 +22,7 @@ jobs:
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
-      - name: Dependency Licenses Review
-        run: cargo deny check
-      # https://doc.rust-lang.org/stable/clippy/continuous_integration/github_actions.html
+
       - name: Run Clippy
         run: cargo clippy --all-targets --all-features
       - name: Check for spelling errors
@@ -37,3 +35,6 @@ jobs:
           reporter: github-check
       # - name: Check if source code files have license header
       #   run: make check-license-headers
+      # this action runs pretty late, to collect previous errors when new advisories arive
+      - uses: EmbarkStudios/cargo-deny-action@v1
+      # https://doc.rust-lang.org/stable/clippy/continuous_integration/github_actions.html
