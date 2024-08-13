@@ -1,4 +1,4 @@
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct RepoChange {
     pub name: String,
     pub remote: String,
