@@ -97,20 +97,26 @@ async fn main() -> Result<(), anyhow::Error> {
                 changes: Vec::new(),
             };
             find_reviews(&octocrab, repo).await.context("while finding reviews")?;
-
             print_changes(&[repo.clone()]);
         },
         Commands::HelmChart { workspace } => {
-            find_values_yaml(&octocrab, workspace.clone(), cli.base, cli.head)
-                .await
+            let mut changes = find_values_yaml(workspace.clone(), &cli.base, &cli.head)
                 .context("while finding values.yaml files")?;
+
+            for repo in &mut changes {
+                find_reviews(&octocrab, repo)
+                    .await
+                    .context("while collecting repo changes")?;
+            }
+
+            print_changes(&changes);
         },
     }
 
     Ok(())
 }
 
-fn parse_remote(remote: &String) -> Result<(String, String), anyhow::Error> {
+fn parse_remote(remote: &str) -> Result<(String, String), anyhow::Error> {
     let repo_parts: Vec<&str> = remote
         .strip_prefix("https://github.com/")
         .ok_or(anyhow!("can't strip https://github.com/ prefix"))?
@@ -122,20 +128,15 @@ fn parse_remote(remote: &String) -> Result<(String, String), anyhow::Error> {
         .ok_or(anyhow!("can't strip .git suffix"))?
         .to_string();
 
-    return Ok((repo_owner, repo_name));
+    Ok((repo_owner, repo_name))
 }
 
-async fn find_values_yaml(
-    octocrab: &Arc<Octocrab>,
-    workspace: String,
-    base: String,
-    head: String,
-) -> Result<(), anyhow::Error> {
+fn find_values_yaml(workspace: String, base: &str, head: &str) -> Result<Vec<RepoChange>, anyhow::Error> {
     let repo = Repository::open(workspace).context("failed to open repository")?;
 
-    let base_ref = repo.revparse_single(&base).context("can't parse base_ref")?.id();
+    let base_ref = repo.revparse_single(base).context("can't parse base_ref")?.id();
 
-    let head_ref = repo.revparse_single(&head).context("can't parse head_ref")?.id();
+    let head_ref = repo.revparse_single(head).context("can't parse head_ref")?.id();
 
     // compare base and head ref against each other and generate the diff GitHub shows in the files tab in the PR
     let base_tree = repo
@@ -189,15 +190,7 @@ async fn find_values_yaml(
         }
     }
 
-    for repo in &mut changes {
-        find_reviews(octocrab, repo)
-            .await
-            .context("while collecting repo changes")?;
-    }
-
-    print_changes(&changes);
-
-    Ok(())
+    Ok(changes)
 }
 
 async fn find_reviews(octocrab: &Arc<Octocrab>, repo: &mut RepoChange) -> Result<(), anyhow::Error> {
