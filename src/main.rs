@@ -3,15 +3,19 @@
 mod changes;
 mod images;
 
+use std::sync::Arc;
+use std::{env, str};
+
 use anyhow::{anyhow, Context};
 use changes::{Change, ChangeCommit, RepoChange};
-use clap::{builder::styling::Style, Parser, Subcommand};
+use clap::builder::styling::Style;
+use clap::{Parser, Subcommand};
 use git2::Repository;
 use images::ContainerImages;
 use octocrab::commits::PullRequestTarget;
-use octocrab::models::{pulls, pulls::ReviewState};
+use octocrab::models::pulls;
+use octocrab::models::pulls::ReviewState;
 use octocrab::Octocrab;
-use std::{env, str, sync::Arc};
 
 const BOLD_UNDERLINE: Style = Style::new().bold().underline();
 
@@ -93,17 +97,15 @@ async fn main() -> Result<(), anyhow::Error> {
                 head_commit: cli.head,
                 changes: Vec::new(),
             };
-            find_reviews(&octocrab, repo)
-                .await
-                .context("while finding reviews")?;
+            find_reviews(&octocrab, repo).await.context("while finding reviews")?;
 
             print_changes(&[repo.clone()]);
-        }
+        },
         Commands::HelmChart { workspace } => {
             find_values_yaml(&octocrab, workspace.clone(), cli.base, cli.head)
                 .await
                 .context("while finding values.yaml files")?;
-        }
+        },
     }
 
     Ok(())
@@ -132,15 +134,9 @@ async fn find_values_yaml(
 ) -> Result<(), anyhow::Error> {
     let repo = Repository::open(workspace).context("failed to open repository")?;
 
-    let base_ref = repo
-        .revparse_single(&base)
-        .context("can't parse base_ref")?
-        .id();
+    let base_ref = repo.revparse_single(&base).context("can't parse base_ref")?.id();
 
-    let head_ref = repo
-        .revparse_single(&head)
-        .context("can't parse head_ref")?
-        .id();
+    let head_ref = repo.revparse_single(&head).context("can't parse head_ref")?.id();
 
     // compare base and head ref against each other and generate the diff GitHub shows in the files tab in the PR
     let base_tree = repo
@@ -171,23 +167,19 @@ async fn find_values_yaml(
         }
 
         let new_images_content = repo.find_blob(new_file.id())?;
-        let new_image_config: ContainerImages =
-            serde_yml::from_slice(new_images_content.content())?;
+        let new_image_config: ContainerImages = serde_yml::from_slice(new_images_content.content())?;
 
         let old_file = diff_delta.old_file();
         if old_file.exists() {
             let old_images_content = repo.find_blob(old_file.id())?;
-            let old_image_config: ContainerImages =
-                serde_yml::from_slice(old_images_content.content())?;
+            let old_image_config: ContainerImages = serde_yml::from_slice(old_images_content.content())?;
 
             for (name, image) in &new_image_config.container_images {
                 for source in &image.sources {
                     changes.push(RepoChange {
                         name: name.clone(),
                         remote: source.repo.clone(),
-                        base_commit: old_image_config.container_images[name].sources[0]
-                            .commit
-                            .clone(),
+                        base_commit: old_image_config.container_images[name].sources[0].commit.clone(),
                         head_commit: source.commit.clone(),
                         changes: Vec::new(),
                     });
@@ -209,10 +201,7 @@ async fn find_values_yaml(
     Ok(())
 }
 
-async fn find_reviews(
-    octocrab: &Arc<Octocrab>,
-    repo: &mut RepoChange,
-) -> Result<(), anyhow::Error> {
+async fn find_reviews(octocrab: &Arc<Octocrab>, repo: &mut RepoChange) -> Result<(), anyhow::Error> {
     let (repo_owner, repo_name) = parse_remote(&repo.remote).context("while parsing remote")?;
 
     let link_prefix = format!("https://github.com/{repo_owner}/{repo_name}");
@@ -343,10 +332,7 @@ fn print_changes(changes: &[RepoChange]) {
     }
 }
 
-fn collect_approved_reviews(
-    pr_reviews: &[pulls::Review],
-    review: &mut Change,
-) -> Result<(), anyhow::Error> {
+fn collect_approved_reviews(pr_reviews: &[pulls::Review], review: &mut Change) -> Result<(), anyhow::Error> {
     for pr_review in pr_reviews {
         // TODO: do we need to check if this is the last review of the user?
         if pr_review.state.ok_or(anyhow!("review has no state"))? == ReviewState::Approved {

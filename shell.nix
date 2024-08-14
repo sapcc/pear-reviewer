@@ -2,14 +2,16 @@
 
 with pkgs;
 
-mkShell {
+let
+  fenix = import (fetchTarball "https://github.com/nix-community/fenix/archive/monthly.tar.gz") { };
+in mkShell {
   nativeBuildInputs = [
     cargo
     cargo-deny
     clippy
     pkg-config
     rustc
-    rustfmt
+    fenix.default.rustfmt
 
     # keep this line if you use bash
     bashInteractive
