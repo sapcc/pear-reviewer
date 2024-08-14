@@ -9,6 +9,7 @@ edition = "2021"
 anyhow = "^1"
 clap = { version = "^4", features = ["derive", "env"] }
 git2 = "^0"
+lazy_static = "^1"
 octocrab = "^0"
 serde = "^1"
 serde_yml = "^0"

@@ -12,19 +12,24 @@ use clap::builder::styling::Style;
 use clap::{Parser, Subcommand};
 use git2::Repository;
 use images::ContainerImages;
+use lazy_static::lazy_static;
 use octocrab::commits::PullRequestTarget;
 use octocrab::models::pulls;
 use octocrab::models::pulls::ReviewState;
 use octocrab::Octocrab;
 
 const BOLD_UNDERLINE: Style = Style::new().bold().underline();
+lazy_static! {
+    static ref GITHUB_TOKEN_HELP: String = format!(
+        "{BOLD_UNDERLINE}Environment variables:{BOLD_UNDERLINE:#}
+  GITHUB_TOKEN                 GitHub token to use for API requests
+"
+    );
+}
 
 /// Program to simplify PCI double approval process across repositories
 #[derive(Parser)]
-#[command(version, about, long_about = None, after_help = format!("{BOLD_UNDERLINE}Environment variables:{BOLD_UNDERLINE:#}
-  GITHUB_TOKEN                 GitHub token to use for API requests
-"))]
-#[command(propagate_version = true)]
+#[command(version, about, long_about = None, after_help = GITHUB_TOKEN_HELP.to_string(), propagate_version = true)]
 // see https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/variables for environment variablesuse
 struct Cli {
     /// The git base ref to compare against
@@ -53,25 +58,19 @@ struct Cli {
 }
 
 #[derive(Subcommand)]
-#[command(propagate_version = true)]
 enum Commands {
     /// Analyzes commits in a repo and finds relevant reviews
+    #[command(after_help = GITHUB_TOKEN_HELP.to_string())]
     Repo {
         /// GitHub git remote to use
         remote: String,
     },
 
     /// Analyzes a helm-charts repo, finds sources from values.yaml files and runs repo subcommand on them
+    #[command(after_help = GITHUB_TOKEN_HELP.to_string())]
     HelmChart {
         /// Git repository where to discover images.yaml files
-        #[arg(
-            short,
-            long,
-            env = "GITHUB_WORKSPACE",
-            hide_env_values = true,
-            required = false,
-            global = true
-        )]
+        #[arg(env = "GITHUB_WORKSPACE", hide_env_values = true, required = false, global = true)]
         workspace: String,
     },
 }
