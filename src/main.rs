@@ -17,6 +17,7 @@ use octocrab::commits::PullRequestTarget;
 use octocrab::models::pulls;
 use octocrab::models::pulls::ReviewState;
 use octocrab::Octocrab;
+use url::Url;
 
 const BOLD_UNDERLINE: Style = Style::new().bold().underline();
 lazy_static! {
@@ -117,16 +118,10 @@ async fn main() -> Result<(), anyhow::Error> {
 }
 
 fn parse_remote(remote: &str) -> Result<(String, String), anyhow::Error> {
-    let repo_parts: Vec<&str> = remote
-        .strip_prefix("https://github.com/")
-        .ok_or(anyhow!("can't strip https://github.com/ prefix"))?
-        .split('/')
-        .collect();
+    let remote_url = Url::parse(remote).context("can't parse remote")?;
+    let repo_parts: Vec<&str> = remote_url.path().trim_start_matches("/").split('/').collect();
     let repo_owner = repo_parts[0].to_string();
-    let repo_name = repo_parts[1]
-        .strip_suffix(".git")
-        .ok_or(anyhow!("can't strip .git suffix"))?
-        .to_string();
+    let repo_name = repo_parts[1].trim_end_matches(".git").to_string();
 
     Ok((repo_owner, repo_name))
 }
