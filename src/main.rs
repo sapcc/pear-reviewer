@@ -246,39 +246,28 @@ async fn find_reviews(octocrab: &Arc<Octocrab>, repo: &mut RepoChangeset) -> Res
             );
             let pr_reviews = pr_reviews_page.take_items();
 
-            let mut found_existing_change = false;
-            let associated_pr_link = associated_pr
-                .html_url
-                .as_ref()
-                .ok_or(anyhow!("pr without an html link!?"))?
-                .to_string();
+            let associated_pr_link = Some(
+                associated_pr
+                    .html_url
+                    .as_ref()
+                    .ok_or(anyhow!("pr without an html link!?"))?
+                    .to_string(),
+            );
 
-            for review in &mut repo.changes {
-                if review.pr_link.as_ref() == Some(&associated_pr_link) {
-                    found_existing_change = true;
-                    review.commits.push(change_commit.clone());
-                    collect_approved_reviews(&pr_reviews, review)?;
-                }
-            }
-
-            if found_existing_change {
+            if let Some(changeset) = repo.changes.iter_mut().find(|cs| cs.pr_link == associated_pr_link) {
+                changeset.commits.push(change_commit.clone());
+                collect_approved_reviews(&pr_reviews, changeset)?;
                 continue;
             }
 
-            let mut review = Changeset {
+            let mut changeset = Changeset {
                 commits:   vec![change_commit.clone()],
-                pr_link:   Some(
-                    associated_pr
-                        .html_url
-                        .as_ref()
-                        .ok_or(anyhow!("pr without an html link!?"))?
-                        .to_string(),
-                ),
+                pr_link:   associated_pr_link,
                 approvals: Vec::new(),
             };
 
-            collect_approved_reviews(&pr_reviews, &mut review)?;
-            repo.changes.push(review);
+            collect_approved_reviews(&pr_reviews, &mut changeset)?;
+            repo.changes.push(changeset);
         }
     }
 
