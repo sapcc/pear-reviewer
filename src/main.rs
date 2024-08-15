@@ -2,6 +2,7 @@
 
 mod changes;
 mod helm_config;
+mod repo;
 mod util;
 
 use std::{env, str};
@@ -117,24 +118,11 @@ async fn main() -> Result<(), anyhow::Error> {
 fn find_values_yaml(workspace: String, base: &str, head: &str) -> Result<Vec<RepoChangeset>, anyhow::Error> {
     let repo = Repository::open(workspace).context("failed to open repository")?;
 
-    let base_ref = repo.revparse_single(base).context("can't parse base_ref")?.id();
-
-    let head_ref = repo.revparse_single(head).context("can't parse head_ref")?.id();
-
-    // compare base and head ref against each other and generate the diff GitHub shows in the files tab in the PR
-    let base_tree = repo
-        .find_commit(base_ref)
-        .context("can't find commit for base_ref")?
-        .tree()
-        .context("can't get tree for base_ref")?;
-    let head_tree = repo
-        .find_commit(head_ref)
-        .context("can't find commit for head_ref")?
-        .tree()
-        .context("can't get tree for head_ref")?;
+    let base_tree = repo::tree_for_commit_ref(&repo, base)?;
+    let head_tree = repo::tree_for_commit_ref(&repo, head)?;
     let diff_tree = repo
         .diff_tree_to_tree(Some(&head_tree), Some(&base_tree), None)
-        .context("can't diff trees")?;
+        .with_context(|| format!("cannot diff trees {} and {}", base_tree.id(), head_tree.id()))?;
 
     let mut changes = Vec::<RepoChangeset>::new();
 
