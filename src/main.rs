@@ -187,31 +187,22 @@ fn print_changes(changes: &[RepoChangeset]) {
                     .collect::<Vec<String>>()
                     .join(" ,<br>"),
                 match pr_link {
-                    Some(pr_link) => short_md_link(pr_link),
+                    Some(link) => {
+                        // PRs prefix number with pound
+                        // https://github.com/sapcc/tenso/pull/187
+                        // [tenso #187](https://github.com/sapcc/tenso/pull/187)
+                        let split: Vec<&str> = link.split('/').collect();
+
+                        if split[5] == "pull" {
+                            format!("[{} #{}]({})", split[4], split[6], link)
+                        } else {
+                            link
+                        }
+                    },
                     None => String::new(),
                 },
                 commit_change.approvals.join("None"),
             );
         }
     }
-}
-
-// for commits take the first 6 chars
-// https://github.com/sapcc/tenso/commit/39241382cc5de6ab54eb34f6ac09dfb740cbee701
-// -> [tenso 392413](https://github.com/sapcc/tenso/commit/39241382cc5de6ab54eb34f6ac09dfb740cbee701)
-//
-// or for PRs prefix number with pound
-// https://github.com/sapcc/tenso/pull/187
-// [tenso #187](https://github.com/sapcc/tenso/pull/187)
-fn short_md_link(link: String) -> String {
-    let split: Vec<&str> = link.split('/').collect();
-
-    // TODO: drop commit path
-    if split[5] == "commit" {
-        return format!("[{} {}]({})", split[4], &split[6][..8], link);
-    } else if split[5] == "pull" {
-        return format!("[{} #{}]({})", split[4], split[6], link);
-    }
-
-    link
 }
