@@ -119,7 +119,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
 fn parse_remote(remote: &str) -> Result<(String, String), anyhow::Error> {
     let remote_url = Url::parse(remote).context("can't parse remote")?;
-    let repo_parts: Vec<&str> = remote_url.path().trim_start_matches("/").split('/').collect();
+    let repo_parts: Vec<&str> = remote_url.path().trim_start_matches('/').split('/').collect();
     let repo_owner = repo_parts[0].to_string();
     let repo_name = repo_parts[1].trim_end_matches(".git").to_string();
 
@@ -174,6 +174,7 @@ fn find_values_yaml(workspace: String, base: &str, head: &str) -> Result<Vec<Rep
                     changes.push(RepoChangeset {
                         name:        name.clone(),
                         remote:      source.repo.clone(),
+                        // TODO: iterate over sources
                         base_commit: old_image_config.container_images[name].sources[0].commit.clone(),
                         head_commit: source.commit.clone(),
                         changes:     Vec::new(),
@@ -218,7 +219,13 @@ async fn find_reviews(octocrab: &Arc<Octocrab>, repo: &mut RepoChangeset) -> Res
         let associated_prs = associated_prs_page.take_items();
 
         let change_commit = CommitMetadata {
-            headline: commit.commit.message.split('\n').collect::<Vec<&str>>()[0].to_string(),
+            headline: commit
+                .commit
+                .message
+                .split('\n')
+                .next()
+                .unwrap_or("<empty commit message>")
+                .to_string(),
             link:     commit.html_url.clone(),
         };
 
