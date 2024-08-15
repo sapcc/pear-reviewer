@@ -193,10 +193,9 @@ fn find_values_yaml(workspace: String, base: &str, head: &str) -> Result<Vec<Rep
     Ok(changes)
 }
 
+// TODO: make member function of repo
 async fn find_reviews(octocrab: &Arc<Octocrab>, repo: &mut RepoChange) -> Result<(), anyhow::Error> {
     let (repo_owner, repo_name) = parse_remote(&repo.remote).context("while parsing remote")?;
-
-    let link_prefix = format!("https://github.com/{repo_owner}/{repo_name}");
 
     let compare = octocrab
         .commits(repo_owner.clone(), repo_name.clone())
@@ -204,8 +203,10 @@ async fn find_reviews(octocrab: &Arc<Octocrab>, repo: &mut RepoChange) -> Result
         .send()
         .await
         .context(format!(
-            "failed to compare {link_prefix}/compare/{}...{}",
-            &repo.base_commit, &repo.head_commit
+            "failed to compare {}/compare/{}...{}",
+            repo.remote.trim_end_matches(".git"),
+            &repo.base_commit,
+            &repo.head_commit
         ))?;
 
     for commit in &compare.commits {
