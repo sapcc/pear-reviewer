@@ -90,18 +90,18 @@ async fn main() -> Result<(), anyhow::Error> {
     match &cli.command {
         Commands::Repo { remote } => {
             let repo = &mut RepoChange {
-                name: parse_remote(remote).context("while parsing remote")?.1,
-                remote: remote.clone(),
+                name:        parse_remote(remote).context("while parsing remote")?.1,
+                remote:      remote.clone(),
                 base_commit: cli.base,
                 head_commit: cli.head,
-                changes: Vec::new(),
+                changes:     Vec::new(),
             };
             find_reviews(&octocrab, repo).await.context("while finding reviews")?;
             print_changes(&[repo.clone()]);
         },
         Commands::HelmChart { workspace } => {
-            let mut changes = find_values_yaml(workspace.clone(), &cli.base, &cli.head)
-                .context("while finding values.yaml files")?;
+            let mut changes =
+                find_values_yaml(workspace.clone(), &cli.base, &cli.head).context("while finding values.yaml files")?;
 
             for repo in &mut changes {
                 find_reviews(&octocrab, repo)
@@ -177,11 +177,11 @@ fn find_values_yaml(workspace: String, base: &str, head: &str) -> Result<Vec<Rep
             for (name, image) in &new_image_config.container_images {
                 for source in &image.sources {
                     changes.push(RepoChange {
-                        name: name.clone(),
-                        remote: source.repo.clone(),
+                        name:        name.clone(),
+                        remote:      source.repo.clone(),
                         base_commit: old_image_config.container_images[name].sources[0].commit.clone(),
                         head_commit: source.commit.clone(),
-                        changes: Vec::new(),
+                        changes:     Vec::new(),
                     });
                 }
             }
@@ -224,13 +224,13 @@ async fn find_reviews(octocrab: &Arc<Octocrab>, repo: &mut RepoChange) -> Result
 
         let change_commit = ChangeCommit {
             headline: commit.commit.message.split('\n').collect::<Vec<&str>>()[0].to_string(),
-            link: commit.html_url.clone(),
+            link:     commit.html_url.clone(),
         };
 
         if associated_prs.is_empty() {
             repo.changes.push(Change {
-                commits: vec![change_commit],
-                pr_link: None,
+                commits:   vec![change_commit],
+                pr_link:   None,
                 approvals: Vec::new(),
             });
             continue;
@@ -271,8 +271,8 @@ async fn find_reviews(octocrab: &Arc<Octocrab>, repo: &mut RepoChange) -> Result
             }
 
             let mut review = Change {
-                commits: vec![change_commit.clone()],
-                pr_link: Some(
+                commits:   vec![change_commit.clone()],
+                pr_link:   Some(
                     associated_pr
                         .html_url
                         .as_ref()
