@@ -1,17 +1,17 @@
 #![warn(clippy::pedantic)]
 
 mod changes;
-mod images;
+mod helm_config;
 
 use std::sync::Arc;
 use std::{env, str};
 
 use anyhow::{anyhow, Context};
-use changes::{Change, ChangeCommit, RepoChange};
+use changes::{Changeset, CommitMetadata, RepoChangeset};
 use clap::builder::styling::Style;
 use clap::{Parser, Subcommand};
 use git2::Repository;
-use images::ContainerImages;
+use helm_config::ImageRefs;
 use lazy_static::lazy_static;
 use octocrab::commits::PullRequestTarget;
 use octocrab::models::pulls;
@@ -90,7 +90,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
     match &cli.command {
         Commands::Repo { remote } => {
-            let repo = &mut RepoChange {
+            let repo = &mut RepoChangeset {
                 name:        parse_remote(remote).context("while parsing remote")?.1,
                 remote:      remote.clone(),
                 base_commit: cli.base,
@@ -126,7 +126,7 @@ fn parse_remote(remote: &str) -> Result<(String, String), anyhow::Error> {
     Ok((repo_owner, repo_name))
 }
 
-fn find_values_yaml(workspace: String, base: &str, head: &str) -> Result<Vec<RepoChange>, anyhow::Error> {
+fn find_values_yaml(workspace: String, base: &str, head: &str) -> Result<Vec<RepoChangeset>, anyhow::Error> {
     let repo = Repository::open(workspace).context("failed to open repository")?;
 
     let base_ref = repo.revparse_single(base).context("can't parse base_ref")?.id();
@@ -148,7 +148,7 @@ fn find_values_yaml(workspace: String, base: &str, head: &str) -> Result<Vec<Rep
         .diff_tree_to_tree(Some(&head_tree), Some(&base_tree), None)
         .context("can't diff trees")?;
 
-    let mut changes = Vec::<RepoChange>::new();
+    let mut changes = Vec::<RepoChangeset>::new();
 
     for diff_delta in diff_tree.deltas() {
         let new_file = diff_delta.new_file();
@@ -162,16 +162,16 @@ fn find_values_yaml(workspace: String, base: &str, head: &str) -> Result<Vec<Rep
         }
 
         let new_images_content = repo.find_blob(new_file.id())?;
-        let new_image_config: ContainerImages = serde_yml::from_slice(new_images_content.content())?;
+        let new_image_config: ImageRefs = serde_yml::from_slice(new_images_content.content())?;
 
         let old_file = diff_delta.old_file();
         if old_file.exists() {
             let old_images_content = repo.find_blob(old_file.id())?;
-            let old_image_config: ContainerImages = serde_yml::from_slice(old_images_content.content())?;
+            let old_image_config: ImageRefs = serde_yml::from_slice(old_images_content.content())?;
 
             for (name, image) in &new_image_config.container_images {
                 for source in &image.sources {
-                    changes.push(RepoChange {
+                    changes.push(RepoChangeset {
                         name:        name.clone(),
                         remote:      source.repo.clone(),
                         base_commit: old_image_config.container_images[name].sources[0].commit.clone(),
@@ -189,7 +189,7 @@ fn find_values_yaml(workspace: String, base: &str, head: &str) -> Result<Vec<Rep
 }
 
 // TODO: make member function of repo
-async fn find_reviews(octocrab: &Arc<Octocrab>, repo: &mut RepoChange) -> Result<(), anyhow::Error> {
+async fn find_reviews(octocrab: &Arc<Octocrab>, repo: &mut RepoChangeset) -> Result<(), anyhow::Error> {
     let (repo_owner, repo_name) = parse_remote(&repo.remote).context("while parsing remote")?;
 
     let compare = octocrab
@@ -217,13 +217,13 @@ async fn find_reviews(octocrab: &Arc<Octocrab>, repo: &mut RepoChange) -> Result
         );
         let associated_prs = associated_prs_page.take_items();
 
-        let change_commit = ChangeCommit {
+        let change_commit = CommitMetadata {
             headline: commit.commit.message.split('\n').collect::<Vec<&str>>()[0].to_string(),
             link:     commit.html_url.clone(),
         };
 
         if associated_prs.is_empty() {
-            repo.changes.push(Change {
+            repo.changes.push(Changeset {
                 commits:   vec![change_commit],
                 pr_link:   None,
                 approvals: Vec::new(),
@@ -265,7 +265,7 @@ async fn find_reviews(octocrab: &Arc<Octocrab>, repo: &mut RepoChange) -> Result
                 continue;
             }
 
-            let mut review = Change {
+            let mut review = Changeset {
                 commits:   vec![change_commit.clone()],
                 pr_link:   Some(
                     associated_pr
@@ -285,7 +285,7 @@ async fn find_reviews(octocrab: &Arc<Octocrab>, repo: &mut RepoChange) -> Result
     Ok(())
 }
 
-fn print_changes(changes: &[RepoChange]) {
+fn print_changes(changes: &[RepoChangeset]) {
     for change in changes {
         println!(
             "Name {} from {} moved from {} to {}",
@@ -320,7 +320,7 @@ fn print_changes(changes: &[RepoChange]) {
     }
 }
 
-fn collect_approved_reviews(pr_reviews: &[pulls::Review], review: &mut Change) -> Result<(), anyhow::Error> {
+fn collect_approved_reviews(pr_reviews: &[pulls::Review], review: &mut Changeset) -> Result<(), anyhow::Error> {
     for pr_review in pr_reviews {
         // TODO: do we need to check if this is the last review of the user?
         if pr_review.state.ok_or(anyhow!("review has no state"))? == ReviewState::Approved {
