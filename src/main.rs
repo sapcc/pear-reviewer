@@ -2,20 +2,18 @@
 
 mod changes;
 mod helm_config;
+mod util;
 
-use std::sync::Arc;
 use std::{env, str};
 
 use anyhow::{anyhow, Context};
-use changes::{Changeset, CommitMetadata, RepoChangeset};
+use changes::RepoChangeset;
 use clap::builder::styling::Style;
 use clap::{Parser, Subcommand};
 use git2::Repository;
 use helm_config::ImageRefs;
 use lazy_static::lazy_static;
-use octocrab::commits::PullRequestTarget;
 use octocrab::Octocrab;
-use url::Url;
 
 const BOLD_UNDERLINE: Style = Style::new().bold().underline();
 lazy_static! {
@@ -89,13 +87,13 @@ async fn main() -> Result<(), anyhow::Error> {
     match &cli.command {
         Commands::Repo { remote } => {
             let repo = &mut RepoChangeset {
-                name:        parse_remote(remote).context("while parsing remote")?.1,
-                remote:      remote.clone(),
+                name: util::parse_remote(remote).context("while parsing remote")?.1,
+                remote: remote.clone(),
                 base_commit: cli.base,
                 head_commit: cli.head,
-                changes:     Vec::new(),
+                changes: Vec::new(),
             };
-            find_reviews(&octocrab, repo).await.context("while finding reviews")?;
+            repo.analyze_commits(&octocrab).await.context("while finding reviews")?;
             print_changes(&[repo.clone()]);
         },
         Commands::HelmChart { workspace } => {
@@ -103,7 +101,7 @@ async fn main() -> Result<(), anyhow::Error> {
                 find_values_yaml(workspace.clone(), &cli.base, &cli.head).context("while finding values.yaml files")?;
 
             for repo in &mut changes {
-                find_reviews(&octocrab, repo)
+                repo.analyze_commits(&octocrab)
                     .await
                     .context("while collecting repo changes")?;
             }
@@ -113,15 +111,6 @@ async fn main() -> Result<(), anyhow::Error> {
     }
 
     Ok(())
-}
-
-fn parse_remote(remote: &str) -> Result<(String, String), anyhow::Error> {
-    let remote_url = Url::parse(remote).context("can't parse remote")?;
-    let repo_parts: Vec<&str> = remote_url.path().trim_start_matches('/').split('/').collect();
-    let repo_owner = repo_parts[0].to_string();
-    let repo_name = repo_parts[1].trim_end_matches(".git").to_string();
-
-    Ok((repo_owner, repo_name))
 }
 
 fn find_values_yaml(workspace: String, base: &str, head: &str) -> Result<Vec<RepoChangeset>, anyhow::Error> {
@@ -170,12 +159,12 @@ fn find_values_yaml(workspace: String, base: &str, head: &str) -> Result<Vec<Rep
             for (name, image) in &new_image_config.container_images {
                 for source in &image.sources {
                     changes.push(RepoChangeset {
-                        name:        name.clone(),
-                        remote:      source.repo.clone(),
+                        name: name.clone(),
+                        remote: source.repo.clone(),
                         // TODO: iterate over sources
                         base_commit: old_image_config.container_images[name].sources[0].commit.clone(),
                         head_commit: source.commit.clone(),
-                        changes:     Vec::new(),
+                        changes: Vec::new(),
                     });
                 }
             }
@@ -185,98 +174,6 @@ fn find_values_yaml(workspace: String, base: &str, head: &str) -> Result<Vec<Rep
     }
 
     Ok(changes)
-}
-
-// TODO: make member function of repo
-async fn find_reviews(octocrab: &Arc<Octocrab>, repo: &mut RepoChangeset) -> Result<(), anyhow::Error> {
-    let (repo_owner, repo_name) = parse_remote(&repo.remote).context("while parsing remote")?;
-
-    let compare = octocrab
-        .commits(repo_owner.clone(), repo_name.clone())
-        .compare(&repo.base_commit, &repo.head_commit)
-        .send()
-        .await
-        .context(format!(
-            "failed to compare {}/compare/{}...{}",
-            repo.remote.trim_end_matches(".git"),
-            &repo.base_commit,
-            &repo.head_commit
-        ))?;
-
-    for commit in &compare.commits {
-        let mut associated_prs_page = octocrab
-            .commits(repo_owner.clone(), repo_name.clone())
-            .associated_pull_requests(PullRequestTarget::Sha(commit.sha.clone()))
-            .send()
-            .await
-            .context("failed to get associated prs")?;
-        assert!(
-            associated_prs_page.next.is_none(),
-            "found more than one page for associated_prs"
-        );
-        let associated_prs = associated_prs_page.take_items();
-
-        let change_commit = CommitMetadata {
-            headline: commit
-                .commit
-                .message
-                .split('\n')
-                .next()
-                .unwrap_or("<empty commit message>")
-                .to_string(),
-            link:     commit.html_url.clone(),
-        };
-
-        if associated_prs.is_empty() {
-            repo.changes.push(Changeset {
-                commits:   vec![change_commit],
-                pr_link:   None,
-                approvals: Vec::new(),
-            });
-            continue;
-        }
-
-        for associated_pr in &associated_prs {
-            println!("pr number: {:}", associated_pr.number);
-
-            let mut pr_reviews_page = octocrab
-                .pulls(repo_owner.clone(), repo_name.clone())
-                .list_reviews(associated_pr.number)
-                .send()
-                .await
-                .context("failed to get reviews")?;
-            assert!(
-                pr_reviews_page.next.is_none(),
-                "found more than one page for associated_prs"
-            );
-            let pr_reviews = pr_reviews_page.take_items();
-
-            let associated_pr_link = Some(
-                associated_pr
-                    .html_url
-                    .as_ref()
-                    .ok_or(anyhow!("pr without an html link!?"))?
-                    .to_string(),
-            );
-
-            if let Some(changeset) = repo.changes.iter_mut().find(|cs| cs.pr_link == associated_pr_link) {
-                changeset.commits.push(change_commit.clone());
-                changeset.collect_approved_reviews(&pr_reviews);
-                continue;
-            }
-
-            let mut changeset = Changeset {
-                commits:   vec![change_commit.clone()],
-                pr_link:   associated_pr_link,
-                approvals: Vec::new(),
-            };
-
-            changeset.collect_approved_reviews(&pr_reviews);
-            repo.changes.push(changeset);
-        }
-    }
-
-    Ok(())
 }
 
 fn print_changes(changes: &[RepoChangeset]) {
