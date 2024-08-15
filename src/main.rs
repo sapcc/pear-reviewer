@@ -14,8 +14,6 @@ use git2::Repository;
 use helm_config::ImageRefs;
 use lazy_static::lazy_static;
 use octocrab::commits::PullRequestTarget;
-use octocrab::models::pulls;
-use octocrab::models::pulls::ReviewState;
 use octocrab::Octocrab;
 use url::Url;
 
@@ -263,7 +261,7 @@ async fn find_reviews(octocrab: &Arc<Octocrab>, repo: &mut RepoChangeset) -> Res
 
             if let Some(changeset) = repo.changes.iter_mut().find(|cs| cs.pr_link == associated_pr_link) {
                 changeset.commits.push(change_commit.clone());
-                collect_approved_reviews(&pr_reviews, changeset)?;
+                changeset.collect_approved_reviews(&pr_reviews);
                 continue;
             }
 
@@ -273,7 +271,7 @@ async fn find_reviews(octocrab: &Arc<Octocrab>, repo: &mut RepoChangeset) -> Res
                 approvals: Vec::new(),
             };
 
-            collect_approved_reviews(&pr_reviews, &mut changeset)?;
+            changeset.collect_approved_reviews(&pr_reviews);
             repo.changes.push(changeset);
         }
     }
@@ -314,24 +312,6 @@ fn print_changes(changes: &[RepoChangeset]) {
             );
         }
     }
-}
-
-fn collect_approved_reviews(pr_reviews: &[pulls::Review], review: &mut Changeset) -> Result<(), anyhow::Error> {
-    for pr_review in pr_reviews {
-        // TODO: do we need to check if this is the last review of the user?
-        if pr_review.state.ok_or(anyhow!("review has no state"))? == ReviewState::Approved {
-            review.approvals.push(
-                pr_review
-                    .user
-                    .as_ref()
-                    .ok_or(anyhow!("review without an user!?"))?
-                    .login
-                    .clone(),
-            );
-        }
-    }
-
-    Ok(())
 }
 
 // for commits take the first 6 chars

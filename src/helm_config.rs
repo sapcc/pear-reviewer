@@ -11,14 +11,14 @@ pub struct ImageRefs {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ImageRef {
-    pub account: String,
+    pub account:    String,
     pub repository: String,
-    pub tag: String,
-    pub sources: Vec<SourceRepoRef>,
+    pub tag:        String,
+    pub sources:    Vec<SourceRepoRef>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SourceRepoRef {
-    pub repo: String,
+    pub repo:   String,
     pub commit: String,
 }
