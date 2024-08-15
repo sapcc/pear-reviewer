@@ -57,16 +57,7 @@ impl RepoChangeset {
         );
         let associated_prs = associated_prs_page.take_items();
 
-        let change_commit = CommitMetadata {
-            headline: commit
-                .commit
-                .message
-                .split('\n')
-                .next()
-                .unwrap_or("<empty commit message>")
-                .to_string(),
-            link: commit.html_url.clone(),
-        };
+        let change_commit = CommitMetadata::new(commit);
 
         if associated_prs.is_empty() {
             self.changes.push(Changeset {
@@ -146,4 +137,20 @@ impl Changeset {
 pub struct CommitMetadata {
     pub headline: String,
     pub link: String,
+}
+
+impl CommitMetadata {
+    pub fn new(commit: &Commit) -> Self {
+        let headline = commit
+            .commit
+            .message
+            .split('\n')
+            .next()
+            .unwrap_or("<empty commit message>")
+            .to_string();
+        CommitMetadata {
+            headline,
+            link: commit.html_url.clone(),
+        }
+    }
 }
