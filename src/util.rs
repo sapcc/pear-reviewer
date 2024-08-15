@@ -1,11 +1,25 @@
 use anyhow::Context;
 use url::Url;
 
-pub fn parse_remote(remote: &str) -> Result<(String, String), anyhow::Error> {
-    let remote_url = Url::parse(remote).context("can't parse remote")?;
-    let repo_parts: Vec<&str> = remote_url.path().trim_start_matches('/').split('/').collect();
-    let repo_owner = repo_parts[0].to_string();
-    let repo_name = repo_parts[1].trim_end_matches(".git").to_string();
+#[derive(Clone, Debug)]
+pub struct Remote {
+    pub host: url::Host,
+    pub port: u16,
+    pub owner: String,
+    pub repository: String,
+    pub original: String,
+}
 
-    Ok((repo_owner, repo_name))
+impl Remote {
+    pub fn parse(url: &str) -> Result<Self, anyhow::Error> {
+        let remote_url = Url::parse(url).context("can't parse remote")?;
+        let path_elements: Vec<&str> = remote_url.path().trim_start_matches('/').split('/').collect();
+        Ok(Remote {
+            host: remote_url.host().context("remote has no host")?.to_owned(),
+            port: remote_url.port_or_known_default().context("remote has no port")?,
+            owner: path_elements[0].to_string(),
+            repository: path_elements[1].trim_end_matches(".git").to_string(),
+            original: url.into(),
+        })
+    }
 }

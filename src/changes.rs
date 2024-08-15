@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::util::parse_remote;
+use crate::util::Remote;
 use anyhow::{anyhow, Context};
 use octocrab::commits::PullRequestTarget;
 use octocrab::models::commits::Commit;
@@ -11,7 +11,7 @@ use octocrab::Octocrab;
 #[derive(Clone, Debug)]
 pub struct RepoChangeset {
     pub name: String,
-    pub remote: String,
+    pub remote: Remote,
     pub base_commit: String,
     pub head_commit: String,
     pub changes: Vec<Changeset>,
@@ -19,16 +19,14 @@ pub struct RepoChangeset {
 
 impl RepoChangeset {
     pub async fn analyze_commits(&mut self, octocrab: &Arc<Octocrab>) -> Result<(), anyhow::Error> {
-        let (repo_owner, repo_name) = parse_remote(&self.remote).context("while parsing remote")?;
-
         let compare = octocrab
-            .commits(repo_owner.clone(), repo_name.clone())
+            .commits(&self.remote.owner, &self.remote.repository)
             .compare(&self.base_commit, &self.head_commit)
             .send()
             .await
             .context(format!(
                 "failed to compare {}/compare/{}...{}",
-                self.remote.trim_end_matches(".git"),
+                self.remote.original.trim_end_matches(".git"),
                 &self.base_commit,
                 &self.head_commit
             ))?;
@@ -41,12 +39,8 @@ impl RepoChangeset {
     }
 
     async fn analyze_commit(&mut self, octocrab: &Arc<Octocrab>, commit: &Commit) -> Result<(), anyhow::Error> {
-        // TODO: it's not nice that we have to do this each time, this should be parsed once and
-        // stored inside of `self.remote`
-        let (repo_owner, repo_name) = parse_remote(&self.remote).context("while parsing remote")?;
-
         let mut associated_prs_page = octocrab
-            .commits(repo_owner.clone(), repo_name.clone())
+            .commits(&self.remote.owner, &self.remote.repository)
             .associated_pull_requests(PullRequestTarget::Sha(commit.sha.clone()))
             .send()
             .await
@@ -72,7 +66,7 @@ impl RepoChangeset {
             println!("pr number: {:}", associated_pr.number);
 
             let mut pr_reviews_page = octocrab
-                .pulls(repo_owner.clone(), repo_name.clone())
+                .pulls(&self.remote.owner, &self.remote.repository)
                 .list_reviews(associated_pr.number)
                 .send()
                 .await

@@ -86,9 +86,10 @@ async fn main() -> Result<(), anyhow::Error> {
 
     match &cli.command {
         Commands::Repo { remote } => {
+            let remote = util::Remote::parse(remote)?;
             let repo = &mut RepoChangeset {
-                name: util::parse_remote(remote).context("while parsing remote")?.1,
-                remote: remote.clone(),
+                name: remote.repository.clone(),
+                remote,
                 base_commit: cli.base,
                 head_commit: cli.head,
                 changes: Vec::new(),
@@ -160,7 +161,7 @@ fn find_values_yaml(workspace: String, base: &str, head: &str) -> Result<Vec<Rep
                 for source in &image.sources {
                     changes.push(RepoChangeset {
                         name: name.clone(),
-                        remote: source.repo.clone(),
+                        remote: util::Remote::parse(&source.repo)?,
                         // TODO: iterate over sources
                         base_commit: old_image_config.container_images[name].sources[0].commit.clone(),
                         head_commit: source.commit.clone(),
@@ -180,7 +181,7 @@ fn print_changes(changes: &[RepoChangeset]) {
     for change in changes {
         println!(
             "Name {} from {} moved from {} to {}",
-            change.name, change.remote, change.base_commit, change.head_commit
+            change.name, change.remote.original, change.base_commit, change.head_commit
         );
         println!("| Commit link | Pull Request link | Approvals | Reviewer's verdict |");
         println!("|-------------|-------------------|-----------|--------------------|");
