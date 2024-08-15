@@ -7,4 +7,3 @@ match_block_trailing_comma = true
 max_width = 120
 overflow_delimited_expr = true
 reorder_impl_items = true
-struct_field_align_threshold = 20
