@@ -201,7 +201,7 @@ fn print_changes(changes: &[RepoChangeset]) {
                     },
                     None => String::new(),
                 },
-                commit_change.approvals.join("None"),
+                commit_change.approvals.join(", "),
             );
         }
     }

@@ -1,12 +1,13 @@
 use std::sync::Arc;
 
-use crate::util::Remote;
 use anyhow::{anyhow, Context};
 use octocrab::commits::PullRequestTarget;
 use octocrab::models::commits::Commit;
 use octocrab::models::pulls::Review;
 use octocrab::models::pulls::ReviewState::Approved;
 use octocrab::Octocrab;
+
+use crate::util::Remote;
 
 #[derive(Clone, Debug)]
 pub struct RepoChangeset {
@@ -73,7 +74,8 @@ impl RepoChangeset {
                 pr_reviews_page.next.is_none(),
                 "found more than one page for associated_prs"
             );
-            let pr_reviews = pr_reviews_page.take_items();
+            let mut pr_reviews = pr_reviews_page.take_items();
+            pr_reviews.sort_by_key(|r| r.submitted_at);
 
             let associated_pr_link = Some(
                 associated_pr
@@ -111,14 +113,29 @@ pub struct Changeset {
 }
 
 impl Changeset {
+    // pr_reviews must be sorted by key submitted_at!
     pub fn collect_approved_reviews(&mut self, pr_reviews: &[Review]) {
-        for pr_review in pr_reviews {
-            // TODO: do we need to check if this is the last review of the user?
-            if pr_review.state == Some(Approved) {
-                let Some(ref user) = pr_review.user else {
-                    continue;
-                };
+        let mut last_review_by: Vec<&String> = vec![];
 
+        // reverse the order of reviews to start with the oldest
+        for pr_review in pr_reviews.iter().rev() {
+            let Some(ref user) = pr_review.user else {
+                continue;
+            };
+
+            // only consider the last review of any user
+            if last_review_by.contains(&&user.login) {
+                continue;
+            }
+            last_review_by.push(&user.login);
+
+            // in case it isn't approve, ignore it
+            if pr_review.state != Some(Approved) {
+                continue;
+            }
+
+            // don't duplicate user names
+            if !self.approvals.contains(&user.login) {
                 self.approvals.push(user.login.clone());
             }
         }
