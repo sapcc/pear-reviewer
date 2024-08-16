@@ -63,8 +63,6 @@ impl RepoChangeset {
         }
 
         for associated_pr in &associated_prs {
-            println!("pr number: {:}", associated_pr.number);
-
             let mut pr_reviews_page = octocrab
                 .pulls(&self.remote.owner, &self.remote.repository)
                 .list_reviews(associated_pr.number)
