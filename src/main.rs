@@ -137,23 +137,23 @@ fn find_values_yaml(workspace: String, base: &str, head: &str) -> Result<Vec<Rep
             continue;
         }
 
-        let new_image_refs = ImageRefs::parse(&repo, &new_file)?;
-
         let old_file = diff_delta.old_file();
-        if old_file.exists() {
-            let old_image_refs = ImageRefs::parse(&repo, &old_file)?;
+        if !old_file.exists() {
+            continue;
+        }
 
-            for (name, image) in &new_image_refs.container_images {
-                for source in &image.sources {
-                    changes.push(RepoChangeset {
-                        name: name.clone(),
-                        remote: util::Remote::parse(&source.repo)?,
-                        // TODO: iterate over sources
-                        base_commit: old_image_refs.container_images[name].sources[0].commit.clone(),
-                        head_commit: source.commit.clone(),
-                        changes: Vec::new(),
-                    });
-                }
+        let new_image_refs = ImageRefs::parse(&repo, &new_file)?;
+        let old_image_refs = ImageRefs::parse(&repo, &old_file)?;
+        for (name, image) in &new_image_refs.container_images {
+            for source in &image.sources {
+                changes.push(RepoChangeset {
+                    name: name.clone(),
+                    remote: util::Remote::parse(&source.repo)?,
+                    // TODO: iterate over sources
+                    base_commit: old_image_refs.container_images[name].sources[0].commit.clone(),
+                    head_commit: source.commit.clone(),
+                    changes: Vec::new(),
+                });
             }
         }
     }
