@@ -2,6 +2,7 @@ use anyhow::Context;
 use url::Url;
 
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 pub struct Remote {
     pub host: url::Host,
     pub port: u16,

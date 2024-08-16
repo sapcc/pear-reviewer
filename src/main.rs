@@ -5,6 +5,7 @@ mod helm_config;
 mod repo;
 mod util;
 
+use std::sync::LazyLock;
 use std::{env, str};
 
 use anyhow::{anyhow, Context};
@@ -13,17 +14,16 @@ use clap::builder::styling::Style;
 use clap::{Parser, Subcommand};
 use git2::Repository;
 use helm_config::ImageRefs;
-use lazy_static::lazy_static;
 use octocrab::Octocrab;
 
 const BOLD_UNDERLINE: Style = Style::new().bold().underline();
-lazy_static! {
-    static ref GITHUB_TOKEN_HELP: String = format!(
+static GITHUB_TOKEN_HELP: LazyLock<String> = LazyLock::new(|| {
+    format!(
         "{BOLD_UNDERLINE}Environment variables:{BOLD_UNDERLINE:#}
   GITHUB_TOKEN                 GitHub token to use for API requests
 "
-    );
-}
+    )
+});
 
 /// Program to simplify PCI double approval process across repositories
 #[derive(Parser)]
