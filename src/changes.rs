@@ -85,9 +85,26 @@ impl RepoChangeset {
                     .to_string(),
             );
 
+            let mut pr_commits_page = octocrab
+              .pulls(&self.remote.owner, &self.remote.repository)
+              .pr_commits(associated_pr.number)
+              .await
+              .context("failed to get pr commits")?;
+            assert!(
+              pr_commits_page.next.is_none(),
+              "found more than one page for associated_prs"
+            );
+
+            let pr_commits = pr_commits_page.take_items();
+            assert!(
+              pr_commits.len() <= 250,
+              "found more than 250 commits which requires a different api endpoint per doc"
+            );
+            let head_sha = pr_commits.last().ok_or(anyhow!("PR contains no commits?"))?.sha.clone();
+
             if let Some(changeset) = self.changes.iter_mut().find(|cs| cs.pr_link == associated_pr_link) {
                 changeset.commits.push(change_commit.clone());
-                changeset.collect_approved_reviews(&pr_reviews);
+                changeset.collect_approved_reviews(&pr_reviews, &head_sha);
                 continue;
             }
 
@@ -97,7 +114,7 @@ impl RepoChangeset {
                 approvals: Vec::new(),
             };
 
-            changeset.collect_approved_reviews(&pr_reviews);
+            changeset.collect_approved_reviews(&pr_reviews, &head_sha);
             self.changes.push(changeset);
         }
 
@@ -114,7 +131,7 @@ pub struct Changeset {
 
 impl Changeset {
     // pr_reviews must be sorted by key submitted_at!
-    pub fn collect_approved_reviews(&mut self, pr_reviews: &[Review]) {
+    pub fn collect_approved_reviews(&mut self, pr_reviews: &[Review], head_sha: &String) {
         let mut last_review_by: Vec<&String> = vec![];
 
         // reverse the order of reviews to start with the oldest
@@ -123,11 +140,19 @@ impl Changeset {
                 continue;
             };
 
-            // only consider the last review of any user
+            // Only consider the last review of any user.
+            // For example a user might have requested changes early on in the PR and later approved it
+            // or requested additional changes after supplying an approval first.
             if last_review_by.contains(&&user.login) {
                 continue;
             }
             last_review_by.push(&user.login);
+
+            // Only account for reviews done on the last commit of the PR.
+            // We could count the PR as partly reviewed but that is to complicated to present at the moment.
+            if pr_review.commit_id != Some(head_sha.to_string()) {
+              continue;
+            }
 
             // in case it isn't approve, ignore it
             if pr_review.state != Some(Approved) {
