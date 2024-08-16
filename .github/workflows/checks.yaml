@@ -36,5 +36,5 @@ jobs:
       # - name: Check if source code files have license header
       #   run: make check-license-headers
       # this action runs pretty late, to collect previous errors when new advisories arive
-      - uses: EmbarkStudios/cargo-deny-action@v1
+      - uses: EmbarkStudios/cargo-deny-action@v2
       # https://doc.rust-lang.org/stable/clippy/continuous_integration/github_actions.html
