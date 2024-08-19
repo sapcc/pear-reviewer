@@ -1,20 +1,22 @@
 #![warn(clippy::pedantic)]
 
+mod api_clients;
 mod changes;
 mod helm_config;
 mod repo;
 mod util;
 
+use std::str;
 use std::sync::LazyLock;
-use std::{env, str};
 
 use anyhow::{anyhow, Context};
+use api_clients::ClientSet;
 use changes::RepoChangeset;
 use clap::builder::styling::Style;
 use clap::{Parser, Subcommand};
 use git2::Repository;
 use helm_config::ImageRefs;
-use octocrab::Octocrab;
+use util::Remote;
 
 const BOLD_UNDERLINE: Style = Style::new().bold().underline();
 static GITHUB_TOKEN_HELP: LazyLock<String> = LazyLock::new(|| {
@@ -77,17 +79,12 @@ enum Commands {
 async fn main() -> Result<(), anyhow::Error> {
     let cli = Cli::parse();
 
-    octocrab::initialise(
-        Octocrab::builder()
-            .personal_token(env::var("GITHUB_TOKEN").context("missing GITHUB_TOKEN env")?)
-            .build()
-            .context("failed to build octocrab client")?,
-    );
-    let octocrab = octocrab::instance();
+    let mut api_clients = ClientSet::new();
 
     match &cli.command {
         Commands::Repo { remote } => {
-            let remote = util::Remote::parse(remote)?;
+          let remote = Remote::parse(remote)?;
+            api_clients.add(&remote)?;
             let repo = &mut RepoChangeset {
                 name: remote.repository.clone(),
                 remote,
@@ -95,7 +92,9 @@ async fn main() -> Result<(), anyhow::Error> {
                 head_commit: cli.head,
                 changes: Vec::new(),
             };
-            repo.analyze_commits(&octocrab).await.context("while finding reviews")?;
+            repo.analyze_commits(&api_clients)
+                .await
+                .context("while finding reviews")?;
             print_changes(&[repo.clone()]);
         },
         Commands::HelmChart { workspace } => {
@@ -103,7 +102,8 @@ async fn main() -> Result<(), anyhow::Error> {
                 find_values_yaml(workspace.clone(), &cli.base, &cli.head).context("while finding values.yaml files")?;
 
             for repo in &mut changes {
-                repo.analyze_commits(&octocrab)
+                api_clients.add(&repo.remote)?;
+                repo.analyze_commits(&api_clients)
                     .await
                     .context("while collecting repo changes")?;
             }

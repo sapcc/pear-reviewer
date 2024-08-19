@@ -7,6 +7,7 @@ use octocrab::models::pulls::Review;
 use octocrab::models::pulls::ReviewState::Approved;
 use octocrab::Octocrab;
 
+use crate::api_clients::ClientSet;
 use crate::util::Remote;
 
 #[derive(Clone, Debug)]
@@ -19,7 +20,9 @@ pub struct RepoChangeset {
 }
 
 impl RepoChangeset {
-    pub async fn analyze_commits(&mut self, octocrab: &Arc<Octocrab>) -> Result<(), anyhow::Error> {
+    pub async fn analyze_commits(&mut self, client_set: &ClientSet) -> Result<(), anyhow::Error> {
+        let octocrab = client_set.get(&self.remote)?;
+
         let compare = octocrab
             .commits(&self.remote.owner, &self.remote.repository)
             .compare(&self.base_commit, &self.head_commit)
@@ -86,19 +89,19 @@ impl RepoChangeset {
             );
 
             let mut pr_commits_page = octocrab
-              .pulls(&self.remote.owner, &self.remote.repository)
-              .pr_commits(associated_pr.number)
-              .await
-              .context("failed to get pr commits")?;
+                .pulls(&self.remote.owner, &self.remote.repository)
+                .pr_commits(associated_pr.number)
+                .await
+                .context("failed to get pr commits")?;
             assert!(
-              pr_commits_page.next.is_none(),
-              "found more than one page for associated_prs"
+                pr_commits_page.next.is_none(),
+                "found more than one page for associated_prs"
             );
 
             let pr_commits = pr_commits_page.take_items();
             assert!(
-              pr_commits.len() <= 250,
-              "found more than 250 commits which requires a different api endpoint per doc"
+                pr_commits.len() <= 250,
+                "found more than 250 commits which requires a different api endpoint per doc"
             );
             let head_sha = pr_commits.last().ok_or(anyhow!("PR contains no commits?"))?.sha.clone();
 
@@ -151,7 +154,7 @@ impl Changeset {
             // Only account for reviews done on the last commit of the PR.
             // We could count the PR as partly reviewed but that is to complicated to present at the moment.
             if pr_review.commit_id != Some(head_sha.to_string()) {
-              continue;
+                continue;
             }
 
             // in case it isn't approve, ignore it
