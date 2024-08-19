@@ -150,8 +150,8 @@ fn find_values_yaml(workspace: String, base: &str, head: &str) -> Result<Vec<Rep
                     name: name.clone(),
                     remote: util::Remote::parse(&source.repo)?,
                     // TODO: iterate over sources
-                    base_commit: old_image_refs.container_images[name].sources[0].commit.clone(),
-                    head_commit: source.commit.clone(),
+                    base_commit: source.commit.clone(),
+                    head_commit: old_image_refs.container_images[name].sources[0].commit.clone(),
                     changes: Vec::new(),
                 });
             }
