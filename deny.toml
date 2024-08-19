@@ -24,3 +24,6 @@ clarify = [
   ] },
 ]
 unused-allowed-license = "allow"
+
+[sources]
+allow-git = [ "https://github.com/SuperSandro2000/octocrab.git" ]
