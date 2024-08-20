@@ -8,7 +8,7 @@ use octocrab::models::pulls::ReviewState::Approved;
 use octocrab::Octocrab;
 
 use crate::api_clients::ClientSet;
-use crate::util::Remote;
+use crate::remote::Remote;
 
 #[derive(Clone, Debug)]
 pub struct RepoChangeset {

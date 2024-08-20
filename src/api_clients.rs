@@ -5,7 +5,7 @@ use std::sync::Arc;
 use anyhow::{anyhow, Context, Ok};
 use octocrab::Octocrab;
 
-use crate::util::Remote;
+use crate::remote::Remote;
 
 pub struct ClientSet {
     octocrab: HashMap<String, Arc<Octocrab>>,
@@ -21,6 +21,7 @@ impl ClientSet {
     pub fn add(&mut self, remote: &Remote) -> Result<(), anyhow::Error> {
         let mut api_endpoint = "https://api.github.com".to_string();
         let mut env_name = "GITHUB_TOKEN".to_string();
+
         if remote.host.to_string() != "github.com" {
             api_endpoint = format!("https://{}/api/v3", &remote.host);
             env_name = format!(

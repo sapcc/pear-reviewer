@@ -4,7 +4,7 @@ mod api_clients;
 mod changes;
 mod helm_config;
 mod repo;
-mod util;
+mod remote;
 
 use std::str;
 use std::sync::LazyLock;
@@ -17,7 +17,7 @@ use clap::{Parser, Subcommand};
 use git2::Repository;
 use helm_config::ImageRefs;
 use url::{Host, Url};
-use util::Remote;
+use remote::Remote;
 
 const BOLD_UNDERLINE: Style = Style::new().bold().underline();
 static GITHUB_TOKEN_HELP: LazyLock<String> = LazyLock::new(|| {
@@ -149,7 +149,7 @@ fn find_values_yaml(workspace: String, base: &str, head: &str) -> Result<Vec<Rep
             for source in &image.sources {
                 changes.push(RepoChangeset {
                     name: name.clone(),
-                    remote: util::Remote::parse(&source.repo)?,
+                    remote: remote::Remote::parse(&source.repo)?,
                     // TODO: iterate over sources
                     base_commit: source.commit.clone(),
                     head_commit: old_image_refs.container_images[name].sources[0].commit.clone(),
