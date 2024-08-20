@@ -22,7 +22,7 @@ impl ClientSet {
         let mut api_endpoint = "https://api.github.com".to_string();
         let mut env_name = "GITHUB_TOKEN".to_string();
         if remote.host.to_string() != "github.com" {
-            api_endpoint = format!("https://{}", &remote.host);
+            api_endpoint = format!("https://{}/api/v3", &remote.host);
             env_name = format!(
                 "GITHUB_{}_TOKEN",
                 &remote
