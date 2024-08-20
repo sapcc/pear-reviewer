@@ -16,6 +16,7 @@ use clap::builder::styling::Style;
 use clap::{Parser, Subcommand};
 use git2::Repository;
 use helm_config::ImageRefs;
+use url::{Host, Url};
 use util::Remote;
 
 const BOLD_UNDERLINE: Style = Style::new().bold().underline();
@@ -83,7 +84,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
     match &cli.command {
         Commands::Repo { remote } => {
-          let remote = Remote::parse(remote)?;
+            let remote = Remote::parse(remote)?;
             api_clients.add(&remote)?;
             let repo = &mut RepoChangeset {
                 name: remote.repository.clone(),
@@ -95,7 +96,7 @@ async fn main() -> Result<(), anyhow::Error> {
             repo.analyze_commits(&api_clients)
                 .await
                 .context("while finding reviews")?;
-            print_changes(&[repo.clone()]);
+            print_changes(&[repo.clone()])?;
         },
         Commands::HelmChart { workspace } => {
             let mut changes =
@@ -108,7 +109,7 @@ async fn main() -> Result<(), anyhow::Error> {
                     .context("while collecting repo changes")?;
             }
 
-            print_changes(&changes);
+            print_changes(&changes)?;
         },
     }
 
@@ -161,7 +162,7 @@ fn find_values_yaml(workspace: String, base: &str, head: &str) -> Result<Vec<Rep
     Ok(changes)
 }
 
-fn print_changes(changes: &[RepoChangeset]) {
+fn print_changes(changes: &[RepoChangeset]) -> Result<(), anyhow::Error> {
     for change in changes {
         println!(
             "Name {} from {} moved from {} to {}",
@@ -170,31 +171,30 @@ fn print_changes(changes: &[RepoChangeset]) {
         println!("| Commit link | Pull Request link | Approvals | Reviewer's verdict |");
         println!("|-------------|-------------------|-----------|--------------------|");
         for commit_change in &change.changes {
+            let mut commit_links: Vec<String> = vec![];
+            for commit in &commit_change.commits {
+                commit_links.push(format!(
+                    "[{}]({})",
+                    match commit.headline.char_indices().nth(45) {
+                        None => commit.headline.clone(),
+                        Some((idx, _)) => commit.headline[..idx].to_string() + "…",
+                    },
+                    prepend_redirect_to_domain(&commit.link)?
+                ));
+            }
+
             let pr_link = commit_change.pr_link.clone();
             println!(
                 "| {} | {} | {} | <enter your decision> |",
-                commit_change
-                    .commits
-                    .iter()
-                    .map(|x| format!(
-                        "[{}]({})",
-                        match x.headline.char_indices().nth(45) {
-                            None => x.headline.clone(),
-                            Some((idx, _)) => x.headline[..idx].to_string() + "…",
-                        },
-                        x.link
-                    ))
-                    .collect::<Vec<String>>()
-                    .join(" ,<br>"),
+                commit_links.join(" ,<br>"),
                 match pr_link {
                     Some(link) => {
                         // PRs prefix number with pound
                         // https://github.com/sapcc/tenso/pull/187
                         // [tenso #187](https://github.com/sapcc/tenso/pull/187)
                         let split: Vec<&str> = link.split('/').collect();
-
                         if split[5] == "pull" {
-                            format!("[{} #{}]({})", split[4], split[6], link)
+                            format!("[{} #{}]({})", split[4], split[6], prepend_redirect_to_domain(&link)?)
                         } else {
                             link
                         }
@@ -205,4 +205,15 @@ fn print_changes(changes: &[RepoChangeset]) {
             );
         }
     }
+
+    Ok(())
+}
+
+fn prepend_redirect_to_domain(link: &str) -> Result<String, anyhow::Error> {
+    let mut parsed_link = Url::parse(link).with_context(|| "failed to parse link {link}")?;
+    if parsed_link.host() == Some(Host::Domain("github.com")) {
+        parsed_link.set_host(Some("redirect.github.com"))?;
+    }
+
+    Ok(parsed_link.to_string())
 }
