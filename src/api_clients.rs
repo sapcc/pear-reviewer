@@ -2,36 +2,56 @@ use std::collections::HashMap;
 use std::env;
 use std::sync::Arc;
 
-use anyhow::{anyhow, Context, Ok};
+use anyhow::Context;
 use octocrab::Octocrab;
+use tokio::sync::{AcquireError, Semaphore, SemaphorePermit};
 
 use crate::remote::Remote;
 
+#[derive(Debug)]
+pub struct Client {
+    semaphore: Semaphore,
+    octocrab: Arc<Octocrab>,
+}
+
+impl Client {
+    pub async fn lock(&self) -> Result<(SemaphorePermit<'_>, &Arc<Octocrab>), AcquireError> {
+        let permit = self.semaphore.acquire().await?;
+        Ok((permit, &self.octocrab))
+    }
+}
+
 pub struct ClientSet {
-    octocrab: HashMap<String, Arc<Octocrab>>,
+    clients: HashMap<String, Arc<Client>>,
 }
 
 impl ClientSet {
     pub fn new() -> Self {
         ClientSet {
-            octocrab: HashMap::new(),
+            clients: HashMap::new(),
         }
     }
 
-    pub fn add(&mut self, remote: &Remote) -> Result<(), anyhow::Error> {
+    pub fn fill(&mut self, remote: &mut Remote) -> Result<(), anyhow::Error> {
+        let host = remote.host.to_string();
+        let client = self.get_client(&host)?;
+        remote.client = Some(client);
+        Ok(())
+    }
+
+    fn get_client(&mut self, host: &str) -> Result<Arc<Client>, anyhow::Error> {
+        if let Some(client) = self.clients.get(host) {
+            return Ok(client.clone());
+        }
+
         let mut api_endpoint = "https://api.github.com".to_string();
         let mut env_name = "GITHUB_TOKEN".to_string();
 
-        if remote.host.to_string() != "github.com" {
-            api_endpoint = format!("https://{}/api/v3", &remote.host);
+        if host != "github.com" {
+            api_endpoint = format!("https://{host}/api/v3");
             env_name = format!(
                 "GITHUB_{}_TOKEN",
-                &remote
-                    .host
-                    .to_string()
-                    .replace('.', "_")
-                    .to_uppercase()
-                    .trim_start_matches("GITHUB_")
+                host.replace('.', "_").to_uppercase().trim_start_matches("GITHUB_")
             );
         };
 
@@ -43,14 +63,11 @@ impl ClientSet {
                 .build()
                 .context("failed to build octocrab client")?,
         );
-        self.octocrab.insert(remote.host.to_string(), octocrab::instance());
-
-        Ok(())
-    }
-
-    pub fn get(&self, remote: &Remote) -> Result<&Arc<Octocrab>, anyhow::Error> {
-        self.octocrab
-            .get(&remote.host.to_string())
-            .ok_or(anyhow!("no api client for {}", &remote.host))
+        let client = Arc::new(Client {
+            semaphore: Semaphore::new(5), // i.e. up to 5 API calls in parallel to the same GitHub instance
+            octocrab: octocrab::instance(),
+        });
+        self.clients.insert(host.to_owned(), client.clone());
+        Ok(client)
     }
 }

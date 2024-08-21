@@ -3,7 +3,6 @@ use octocrab::models::commits::Commit;
 use octocrab::models::pulls::Review;
 use octocrab::models::pulls::ReviewState::Approved;
 
-use crate::api_clients::ClientSet;
 use crate::remote::Remote;
 
 #[derive(Clone, Debug)]
@@ -16,21 +15,18 @@ pub struct RepoChangeset {
 }
 
 impl RepoChangeset {
-    pub async fn analyze_commits(&mut self, client_set: &ClientSet) -> Result<(), anyhow::Error> {
-        let compare = self
-            .remote
-            .compare(client_set, &self.base_commit, &self.head_commit)
-            .await?;
+    pub async fn analyze_commits(&mut self) -> Result<(), anyhow::Error> {
+        let compare = self.remote.compare(&self.base_commit, &self.head_commit).await?;
 
         for commit in &compare.commits {
-            self.analyze_commit(client_set, commit).await?;
+            self.analyze_commit(commit).await?;
         }
 
         Ok(())
     }
 
-    async fn analyze_commit(&mut self, client_set: &ClientSet, commit: &Commit) -> Result<(), anyhow::Error> {
-        let associated_prs = self.remote.associated_prs(client_set, commit).await?;
+    async fn analyze_commit(&mut self, commit: &Commit) -> Result<(), anyhow::Error> {
+        let associated_prs = self.remote.associated_prs(commit).await?;
 
         let change_commit = CommitMetadata::new(commit);
         if associated_prs.is_empty() {
@@ -43,7 +39,7 @@ impl RepoChangeset {
         }
 
         for associated_pr in &associated_prs {
-            let pr_reviews = self.remote.pr_reviews(client_set, associated_pr.number).await?;
+            let pr_reviews = self.remote.pr_reviews(associated_pr.number).await?;
 
             let associated_pr_link = Some(
                 associated_pr
@@ -53,7 +49,7 @@ impl RepoChangeset {
                     .to_string(),
             );
 
-            let head_sha = self.remote.pr_head_hash(client_set, associated_pr.number).await?;
+            let head_sha = self.remote.pr_head_hash(associated_pr.number).await?;
 
             if let Some(changeset) = self.changes.iter_mut().find(|cs| cs.pr_link == associated_pr_link) {
                 changeset.commits.push(change_commit.clone());

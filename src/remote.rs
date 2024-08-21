@@ -3,9 +3,12 @@ use octocrab::commits::PullRequestTarget;
 use octocrab::models::commits::{Commit, CommitComparison};
 use octocrab::models::pulls::{PullRequest, Review};
 use octocrab::models::repos::RepoCommit;
+use octocrab::Octocrab;
+use std::sync::Arc;
+use tokio::sync::SemaphorePermit;
 use url::Url;
 
-use crate::api_clients::ClientSet;
+use crate::api_clients::Client;
 
 #[derive(Clone, Debug)]
 #[allow(dead_code)]
@@ -15,6 +18,7 @@ pub struct Remote {
     pub owner: String,
     pub repository: String,
     pub original: String,
+    pub client: Option<Arc<Client>>,
 }
 
 impl Remote {
@@ -27,16 +31,19 @@ impl Remote {
             owner: path_elements[0].to_string(),
             repository: path_elements[1].trim_end_matches(".git").to_string(),
             original: url.into(),
+            client: None,
         })
     }
 
-    pub async fn associated_prs(
-        &self,
-        client_set: &ClientSet,
-        commit: &Commit,
-    ) -> Result<Vec<PullRequest>, anyhow::Error> {
-        let mut associated_prs_page = client_set
-            .get(self)?
+    async fn get_client(&self) -> Result<(SemaphorePermit<'_>, &Arc<Octocrab>), anyhow::Error> {
+        let client = self.client.as_ref().ok_or(anyhow!("no client attached to remote"))?;
+        client.lock().await.context("cannot obtain semaphore for client")
+    }
+
+    pub async fn associated_prs(&self, commit: &Commit) -> Result<Vec<PullRequest>, anyhow::Error> {
+        let (_permit, octocrab) = self.get_client().await?;
+
+        let mut associated_prs_page = octocrab
             .commits(&self.owner, &self.repository)
             .associated_pull_requests(PullRequestTarget::Sha(commit.clone().sha.clone()))
             .send()
@@ -49,14 +56,10 @@ impl Remote {
         Ok(associated_prs_page.take_items())
     }
 
-    pub async fn compare(
-        &self,
-        client_set: &ClientSet,
-        base_commit: &str,
-        head_commit: &str,
-    ) -> Result<CommitComparison, anyhow::Error> {
-        client_set
-            .get(self)?
+    pub async fn compare(&self, base_commit: &str, head_commit: &str) -> Result<CommitComparison, anyhow::Error> {
+        let (_permit, octocrab) = self.get_client().await?;
+
+        octocrab
             .commits(&self.owner, &self.repository)
             .compare(base_commit, head_commit)
             .send()
@@ -69,9 +72,9 @@ impl Remote {
             ))
     }
 
-    pub async fn pr_head_hash(&self, client_set: &ClientSet, pr_number: u64) -> Result<String, anyhow::Error> {
+    pub async fn pr_head_hash(&self, pr_number: u64) -> Result<String, anyhow::Error> {
         Ok(self
-            .pr_commits(client_set, pr_number)
+            .pr_commits(pr_number)
             .await
             .context("failed to get pr commits")?
             .last()
@@ -80,9 +83,10 @@ impl Remote {
             .clone())
     }
 
-    pub async fn pr_commits(&self, client_set: &ClientSet, pr_number: u64) -> Result<Vec<RepoCommit>, anyhow::Error> {
-        let mut pr_commits_page = client_set
-            .get(self)?
+    pub async fn pr_commits(&self, pr_number: u64) -> Result<Vec<RepoCommit>, anyhow::Error> {
+        let (_permit, octocrab) = self.get_client().await?;
+
+        let mut pr_commits_page = octocrab
             .pulls(&self.owner, &self.repository)
             .pr_commits(pr_number)
             .await
@@ -101,9 +105,10 @@ impl Remote {
         Ok(pr_commits)
     }
 
-    pub async fn pr_reviews(&self, client_set: &ClientSet, pr_number: u64) -> Result<Vec<Review>, anyhow::Error> {
-        let mut pr_reviews_page = client_set
-            .get(self)?
+    pub async fn pr_reviews(&self, pr_number: u64) -> Result<Vec<Review>, anyhow::Error> {
+        let (_permit, octocrab) = self.get_client().await?;
+
+        let mut pr_reviews_page = octocrab
             .pulls(&self.owner, &self.repository)
             .list_reviews(pr_number)
             .send()

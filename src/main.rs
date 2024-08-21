@@ -3,8 +3,8 @@
 mod api_clients;
 mod changes;
 mod helm_config;
-mod repo;
 mod remote;
+mod repo;
 
 use std::str;
 use std::sync::LazyLock;
@@ -16,8 +16,8 @@ use clap::builder::styling::Style;
 use clap::{Parser, Subcommand};
 use git2::Repository;
 use helm_config::ImageRefs;
-use url::{Host, Url};
 use remote::Remote;
+use url::{Host, Url};
 
 const BOLD_UNDERLINE: Style = Style::new().bold().underline();
 static GITHUB_TOKEN_HELP: LazyLock<String> = LazyLock::new(|| {
@@ -84,8 +84,8 @@ async fn main() -> Result<(), anyhow::Error> {
 
     match &cli.command {
         Commands::Repo { remote } => {
-            let remote = Remote::parse(remote)?;
-            api_clients.add(&remote)?;
+            let mut remote = Remote::parse(remote)?;
+            api_clients.fill(&mut remote)?;
             let repo = &mut RepoChangeset {
                 name: remote.repository.clone(),
                 remote,
@@ -93,9 +93,7 @@ async fn main() -> Result<(), anyhow::Error> {
                 head_commit: cli.head,
                 changes: Vec::new(),
             };
-            repo.analyze_commits(&api_clients)
-                .await
-                .context("while finding reviews")?;
+            repo.analyze_commits().await.context("while finding reviews")?;
             print_changes(&[repo.clone()])?;
         },
         Commands::HelmChart { workspace } => {
@@ -103,10 +101,8 @@ async fn main() -> Result<(), anyhow::Error> {
                 find_values_yaml(workspace.clone(), &cli.base, &cli.head).context("while finding values.yaml files")?;
 
             for repo in &mut changes {
-                api_clients.add(&repo.remote)?;
-                repo.analyze_commits(&api_clients)
-                    .await
-                    .context("while collecting repo changes")?;
+                api_clients.fill(&mut repo.remote)?;
+                repo.analyze_commits().await.context("while collecting repo changes")?;
             }
 
             print_changes(&changes)?;
