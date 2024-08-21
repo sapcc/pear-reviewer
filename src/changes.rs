@@ -1,11 +1,7 @@
-use std::sync::Arc;
-
-use anyhow::{anyhow, Context};
-use octocrab::commits::PullRequestTarget;
+use anyhow::anyhow;
 use octocrab::models::commits::Commit;
 use octocrab::models::pulls::Review;
 use octocrab::models::pulls::ReviewState::Approved;
-use octocrab::Octocrab;
 
 use crate::api_clients::ClientSet;
 use crate::remote::Remote;
@@ -21,42 +17,22 @@ pub struct RepoChangeset {
 
 impl RepoChangeset {
     pub async fn analyze_commits(&mut self, client_set: &ClientSet) -> Result<(), anyhow::Error> {
-        let octocrab = client_set.get(&self.remote)?;
-
-        let compare = octocrab
-            .commits(&self.remote.owner, &self.remote.repository)
-            .compare(&self.base_commit, &self.head_commit)
-            .send()
-            .await
-            .context(format!(
-                "failed to compare {}/compare/{}...{}",
-                self.remote.original.trim_end_matches(".git"),
-                &self.base_commit,
-                &self.head_commit
-            ))?;
+        let compare = self
+            .remote
+            .compare(client_set, &self.base_commit, &self.head_commit)
+            .await?;
 
         for commit in &compare.commits {
-            self.analyze_commit(octocrab, commit).await?;
+            self.analyze_commit(client_set, commit).await?;
         }
 
         Ok(())
     }
 
-    async fn analyze_commit(&mut self, octocrab: &Arc<Octocrab>, commit: &Commit) -> Result<(), anyhow::Error> {
-        let mut associated_prs_page = octocrab
-            .commits(&self.remote.owner, &self.remote.repository)
-            .associated_pull_requests(PullRequestTarget::Sha(commit.sha.clone()))
-            .send()
-            .await
-            .context("failed to get associated prs")?;
-        assert!(
-            associated_prs_page.next.is_none(),
-            "found more than one page for associated_prs"
-        );
-        let associated_prs = associated_prs_page.take_items();
+    async fn analyze_commit(&mut self, client_set: &ClientSet, commit: &Commit) -> Result<(), anyhow::Error> {
+        let associated_prs = self.remote.associated_prs(client_set, commit).await?;
 
         let change_commit = CommitMetadata::new(commit);
-
         if associated_prs.is_empty() {
             self.changes.push(Changeset {
                 commits: vec![change_commit],
@@ -67,18 +43,7 @@ impl RepoChangeset {
         }
 
         for associated_pr in &associated_prs {
-            let mut pr_reviews_page = octocrab
-                .pulls(&self.remote.owner, &self.remote.repository)
-                .list_reviews(associated_pr.number)
-                .send()
-                .await
-                .context("failed to get reviews")?;
-            assert!(
-                pr_reviews_page.next.is_none(),
-                "found more than one page for associated_prs"
-            );
-            let mut pr_reviews = pr_reviews_page.take_items();
-            pr_reviews.sort_by_key(|r| r.submitted_at);
+            let pr_reviews = self.remote.pr_reviews(client_set, associated_pr.number).await?;
 
             let associated_pr_link = Some(
                 associated_pr
@@ -88,22 +53,7 @@ impl RepoChangeset {
                     .to_string(),
             );
 
-            let mut pr_commits_page = octocrab
-                .pulls(&self.remote.owner, &self.remote.repository)
-                .pr_commits(associated_pr.number)
-                .await
-                .context("failed to get pr commits")?;
-            assert!(
-                pr_commits_page.next.is_none(),
-                "found more than one page for associated_prs"
-            );
-
-            let pr_commits = pr_commits_page.take_items();
-            assert!(
-                pr_commits.len() <= 250,
-                "found more than 250 commits which requires a different api endpoint per doc"
-            );
-            let head_sha = pr_commits.last().ok_or(anyhow!("PR contains no commits?"))?.sha.clone();
+            let head_sha = self.remote.pr_head_hash(client_set, associated_pr.number).await?;
 
             if let Some(changeset) = self.changes.iter_mut().find(|cs| cs.pr_link == associated_pr_link) {
                 changeset.commits.push(change_commit.clone());
