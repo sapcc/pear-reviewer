@@ -1,10 +1,11 @@
+use std::sync::Arc;
+
 use anyhow::{anyhow, Context};
 use octocrab::commits::PullRequestTarget;
 use octocrab::models::commits::{Commit, CommitComparison};
 use octocrab::models::pulls::{PullRequest, Review};
 use octocrab::models::repos::RepoCommit;
 use octocrab::Octocrab;
-use std::sync::Arc;
 use tokio::sync::SemaphorePermit;
 use url::Url;
 
