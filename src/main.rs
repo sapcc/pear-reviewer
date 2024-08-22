@@ -17,6 +17,7 @@ use clap::{Parser, Subcommand};
 use git2::Repository;
 use helm_config::ImageRefs;
 use remote::Remote;
+use tokio::task::JoinSet;
 use url::{Host, Url};
 
 const BOLD_UNDERLINE: Style = Style::new().bold().underline();
@@ -86,23 +87,30 @@ async fn main() -> Result<(), anyhow::Error> {
         Commands::Repo { remote } => {
             let mut remote = Remote::parse(remote)?;
             api_clients.fill(&mut remote)?;
-            let repo = &mut RepoChangeset {
+            let repo = RepoChangeset {
                 name: remote.repository.clone(),
                 remote,
                 base_commit: cli.base,
                 head_commit: cli.head,
                 changes: Vec::new(),
             };
-            repo.analyze_commits().await.context("while finding reviews")?;
-            print_changes(&[repo.clone()])?;
+            let repo = repo.analyze_commits().await.context("while finding reviews")?;
+            print_changes(&[repo])?;
         },
         Commands::HelmChart { workspace } => {
-            let mut changes =
+            let changes =
                 find_values_yaml(workspace.clone(), &cli.base, &cli.head).context("while finding values.yaml files")?;
 
-            for repo in &mut changes {
+            let mut join_set = JoinSet::new();
+            for mut repo in changes {
                 api_clients.fill(&mut repo.remote)?;
-                repo.analyze_commits().await.context("while collecting repo changes")?;
+                join_set.spawn(repo.analyze_commits());
+            }
+
+            let mut changes = Vec::new();
+            while let Some(res) = join_set.join_next().await {
+                let repo_changeset = res?.context("while collecting repo changes")?;
+                changes.push(repo_changeset);
             }
 
             print_changes(&changes)?;

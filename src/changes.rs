@@ -1,7 +1,8 @@
-use anyhow::anyhow;
+use anyhow::{anyhow, Context};
 use octocrab::models::commits::Commit;
 use octocrab::models::pulls::Review;
 use octocrab::models::pulls::ReviewState::Approved;
+use tokio::task::JoinSet;
 
 use crate::remote::Remote;
 
@@ -15,27 +16,35 @@ pub struct RepoChangeset {
 }
 
 impl RepoChangeset {
-    pub async fn analyze_commits(&mut self) -> Result<(), anyhow::Error> {
+    pub async fn analyze_commits(mut self) -> Result<Self, anyhow::Error> {
         let compare = self.remote.compare(&self.base_commit, &self.head_commit).await?;
 
-        for commit in &compare.commits {
-            self.analyze_commit(commit).await?;
+        let mut join_set = JoinSet::new();
+        for commit in compare.commits {
+            join_set.spawn(self.clone().analyze_commit(commit));
         }
 
-        Ok(())
+        while let Some(res) = join_set.join_next().await {
+            let changes = res?.context("while collecting change")?;
+            for change in changes {
+                self.changes.push(change);
+            }
+        }
+
+        Ok(self)
     }
 
-    async fn analyze_commit(&mut self, commit: &Commit) -> Result<(), anyhow::Error> {
-        let associated_prs = self.remote.associated_prs(commit).await?;
+    async fn analyze_commit(mut self, commit: Commit) -> Result<Vec<Changeset>, anyhow::Error> {
+        let change_commit = CommitMetadata::new(&commit);
 
-        let change_commit = CommitMetadata::new(commit);
+        let associated_prs = self.remote.associated_prs(&commit).await?;
         if associated_prs.is_empty() {
             self.changes.push(Changeset {
                 commits: vec![change_commit],
                 pr_link: None,
                 approvals: Vec::new(),
             });
-            return Ok(());
+            return Ok(self.changes);
         }
 
         for associated_pr in &associated_prs {
@@ -67,7 +76,7 @@ impl RepoChangeset {
             self.changes.push(changeset);
         }
 
-        Ok(())
+        Ok(self.changes)
     }
 }
 
