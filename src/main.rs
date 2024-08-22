@@ -151,7 +151,7 @@ fn find_values_yaml(workspace: String, base: &str, head: &str) -> Result<Vec<Rep
             continue;
         }
 
-        let path = new_file.path().ok_or(anyhow!("failed to get file path"))?;
+        let path = new_file.path().ok_or_else(|| anyhow!("failed to get file path"))?;
         if !path.ends_with("images.yaml") {
             continue;
         }

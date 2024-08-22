@@ -40,7 +40,7 @@ impl Remote {
     pub fn parse(url: &str) -> Result<Self, anyhow::Error> {
         let remote_url = Url::parse(url).context("can't parse remote")?;
         let path_elements: Vec<&str> = remote_url.path().trim_start_matches('/').split('/').collect();
-        Ok(Remote {
+        Ok(Self {
             host: remote_url.host().context("remote has no host")?.to_owned(),
             port: remote_url.port_or_known_default().context("remote has no port")?,
             owner: path_elements[0].to_string(),
@@ -51,7 +51,10 @@ impl Remote {
     }
 
     async fn get_client(&self) -> Result<(SemaphorePermit<'_>, &Arc<Octocrab>), anyhow::Error> {
-        let client = self.client.as_ref().ok_or(anyhow!("no client attached to remote"))?;
+        let client = self
+            .client
+            .as_ref()
+            .ok_or_else(|| anyhow!("no client attached to remote"))?;
         client.lock().await.context("cannot obtain semaphore for client")
     }
 
@@ -93,7 +96,7 @@ impl Remote {
             .await
             .context("failed to get pr commits")?
             .last()
-            .ok_or(anyhow!("PR contains no commits?"))?
+            .ok_or_else(|| anyhow!("PR contains no commits?"))?
             .sha
             .clone())
     }

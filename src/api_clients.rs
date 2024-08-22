@@ -41,7 +41,7 @@ pub struct ClientSet {
 
 impl ClientSet {
     pub fn new() -> Self {
-        ClientSet {
+        Self {
             clients: HashMap::new(),
         }
     }

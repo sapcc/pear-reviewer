@@ -68,7 +68,7 @@ impl RepoChangeset {
                 associated_pr
                     .html_url
                     .as_ref()
-                    .ok_or(anyhow!("pr without an html link!?"))?
+                    .ok_or_else(|| anyhow!("pr without an html link!?"))?
                     .to_string(),
             );
 
@@ -154,7 +154,7 @@ impl CommitMetadata {
             .next()
             .unwrap_or("<empty commit message>")
             .to_string();
-        CommitMetadata {
+        Self {
             headline,
             link: commit.html_url.clone(),
         }
