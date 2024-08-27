@@ -14,10 +14,9 @@
 
 use anyhow::{anyhow, Context};
 use octocrab::models::commits::Commit;
-use octocrab::models::pulls::Review;
-use octocrab::models::pulls::ReviewState::Approved;
 use tokio::task::JoinSet;
 
+use crate::github::Review;
 use crate::remote::Remote;
 
 #[derive(Clone, Debug)]
@@ -104,36 +103,32 @@ pub struct Changeset {
 impl Changeset {
     // pr_reviews must be sorted by key submitted_at!
     pub fn collect_approved_reviews(&mut self, pr_reviews: &[Review], head_sha: &String) {
-        let mut last_review_by: Vec<&String> = vec![];
+        let mut last_review_by: Vec<String> = vec![];
 
         // reverse the order of reviews to start with the oldest
         for pr_review in pr_reviews.iter().rev() {
-            let Some(ref user) = pr_review.user else {
-                continue;
-            };
-
             // Only consider the last review of any user.
             // For example a user might have requested changes early on in the PR and later approved it
             // or requested additional changes after supplying an approval first.
-            if last_review_by.contains(&&user.login) {
+            if last_review_by.contains(&pr_review.user) {
                 continue;
             }
-            last_review_by.push(&user.login);
+            last_review_by.push(pr_review.user.clone());
 
             // Only account for reviews done on the last commit of the PR.
             // We could count the PR as partly reviewed but that is to complicated to present at the moment.
-            if pr_review.commit_id != Some(head_sha.to_string()) {
+            if pr_review.commit_id != *head_sha {
                 continue;
             }
 
             // in case it isn't approve, ignore it
-            if pr_review.state != Some(Approved) {
+            if !pr_review.approved {
                 continue;
             }
 
             // don't duplicate user names
-            if !self.approvals.contains(&user.login) {
-                self.approvals.push(user.login.clone());
+            if !self.approvals.contains(&pr_review.user) {
+                self.approvals.push(pr_review.user.clone());
             }
         }
     }

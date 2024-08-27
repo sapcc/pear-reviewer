@@ -16,6 +16,7 @@
 
 mod api_clients;
 mod changes;
+mod github;
 mod helm_config;
 mod remote;
 mod repo;

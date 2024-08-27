@@ -16,14 +16,15 @@ use std::sync::Arc;
 
 use anyhow::{anyhow, Context};
 use octocrab::commits::PullRequestTarget;
-use octocrab::models::commits::{Commit, CommitComparison};
-use octocrab::models::pulls::{PullRequest, Review};
+use octocrab::models::commits::CommitComparison;
+use octocrab::models::pulls::{PullRequest, ReviewState};
 use octocrab::models::repos::RepoCommit;
 use octocrab::Octocrab;
 use tokio::sync::SemaphorePermit;
 use url::Url;
 
 use crate::api_clients::Client;
+use crate::github::Review;
 
 #[derive(Clone, Debug)]
 #[allow(dead_code)]
@@ -136,8 +137,22 @@ impl Remote {
             pr_reviews_page.next.is_none(),
             "found more than one page for associated_prs"
         );
-        let mut pr_reviews = pr_reviews_page.take_items();
-        pr_reviews.sort_by_key(|r| r.submitted_at);
-        Ok(pr_reviews)
+        let pr_reviews = pr_reviews_page.take_items();
+
+        let mut reviews = Vec::new();
+        for pr_review in &pr_reviews {
+            reviews.push(Review {
+                approved: pr_review.state == Some(ReviewState::Approved),
+                commit_id: pr_review.commit_id.clone().ok_or(anyhow!("review has no commit_id"))?,
+                submitted_at: pr_review
+                    .submitted_at
+                    .ok_or_else(|| anyhow!("review has no submitted_at"))?
+                    .timestamp_micros(),
+                user: pr_review.user.clone().ok_or(anyhow!("review has no user"))?.login,
+            });
+        }
+
+        reviews.sort_by_key(|r| r.submitted_at);
+        Ok(reviews)
     }
 }
