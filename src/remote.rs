@@ -59,12 +59,12 @@ impl Remote {
         client.lock().await.context("cannot obtain semaphore for client")
     }
 
-    pub async fn associated_prs(&self, commit: &Commit) -> Result<Vec<PullRequest>, anyhow::Error> {
+    pub async fn associated_prs(&self, sha: String) -> Result<Vec<PullRequest>, anyhow::Error> {
         let (_permit, octocrab) = self.get_client().await?;
 
         let mut associated_prs_page = octocrab
             .commits(&self.owner, &self.repository)
-            .associated_pull_requests(PullRequestTarget::Sha(commit.clone().sha.clone()))
+            .associated_pull_requests(PullRequestTarget::Sha(sha))
             .send()
             .await
             .context("failed to get associated prs")?;

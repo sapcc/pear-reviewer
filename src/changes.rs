@@ -47,10 +47,11 @@ impl RepoChangeset {
         Ok(self)
     }
 
+    // TODO: add test
     async fn analyze_commit(mut self, commit: Commit) -> Result<Vec<Changeset>, anyhow::Error> {
         let change_commit = CommitMetadata::new(&commit);
 
-        let associated_prs = self.remote.associated_prs(&commit).await?;
+        let associated_prs = self.remote.associated_prs(commit.sha.clone()).await?;
         if associated_prs.is_empty() {
             self.changes.push(Changeset {
                 commits: vec![change_commit],
