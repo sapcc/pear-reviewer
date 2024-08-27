@@ -53,6 +53,7 @@ impl ClientSet {
         Ok(())
     }
 
+    // TODO: add test
     fn get_client(&mut self, host: &str) -> Result<Arc<Client>, anyhow::Error> {
         if let Some(client) = self.clients.get(host) {
             return Ok(client.clone());

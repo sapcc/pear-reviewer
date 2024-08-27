@@ -26,6 +26,7 @@ pub struct ImageRefs {
 }
 
 impl ImageRefs {
+    // TODO: add test
     pub fn parse(repo: &Repository, diff_file: &DiffFile) -> Result<Self, anyhow::Error> {
         let blob_id = diff_file.id();
         let blob = repo

@@ -103,6 +103,7 @@ pub struct Changeset {
 
 impl Changeset {
     // pr_reviews must be sorted by key submitted_at!
+    // TODO: add test
     pub fn collect_approved_reviews(&mut self, pr_reviews: &[Review], head_sha: &String) {
         let mut last_review_by: Vec<String> = vec![];
 
@@ -154,5 +155,64 @@ impl CommitMetadata {
             headline,
             link: commit.html_url.clone(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::github::Review;
+
+    fn gen_change_review() -> (Changeset, Vec<Review>) {
+        (
+            Changeset {
+                commits: vec![
+                    CommitMetadata {
+                        headline: "Commit 1".to_owned(),
+                        link: "https://github.com/example/project/commit/00000000000000000000000000000001".to_owned(),
+                    },
+                    CommitMetadata {
+                        headline: "Commit 2".to_owned(),
+                        link: "https://github.com/example/project/commit/00000000000000000000000000000002".to_owned(),
+                    },
+                ],
+                pr_link: Some("https://github.com/example/project/pulls/1".to_owned()),
+                approvals: Vec::new(),
+            },
+            vec![
+                Review {
+                    approved: true,
+                    commit_id: "00000000000000000000000000000001".to_owned(),
+                    submitted_at: 1,
+                    user: "user1".to_owned(),
+                },
+                Review {
+                    approved: true,
+                    commit_id: "00000000000000000000000000000002".to_owned(),
+                    submitted_at: 2,
+                    user: "user2".to_owned(),
+                },
+                Review {
+                  approved: false,
+                  commit_id: "00000000000000000000000000000003".to_owned(),
+                  submitted_at: 3,
+                  user: "user3".to_owned(),
+              },
+            ],
+        )
+    }
+
+    #[test]
+    fn collect_approved_reviews() {
+        let (mut changeset, pr_reviews) = gen_change_review();
+        changeset.collect_approved_reviews(&pr_reviews, &"00000000000000000000000000000002".to_string());
+        assert_eq!(changeset.approvals, vec!["user2"]);
+    }
+
+    #[test]
+    fn collect_approved_reviews_extra_commit() {
+        let (mut changeset, pr_reviews) = gen_change_review();
+        changeset.collect_approved_reviews(&pr_reviews, &"00000000000000000000000000000003".to_string());
+        assert_eq!(changeset.approvals, Vec::<String>::new());
     }
 }
