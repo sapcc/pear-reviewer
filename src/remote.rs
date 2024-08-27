@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use anyhow::{anyhow, Context};
+use anyhow::{anyhow, bail, Context};
 use octocrab::commits::PullRequestTarget;
 use octocrab::models::commits::CommitComparison;
 use octocrab::models::pulls::{PullRequest, ReviewState};
@@ -41,6 +41,11 @@ impl Remote {
     pub fn parse(url: &str) -> Result<Self, anyhow::Error> {
         let remote_url = Url::parse(url).context("can't parse remote")?;
         let path_elements: Vec<&str> = remote_url.path().trim_start_matches('/').split('/').collect();
+
+        if path_elements.len() != 2 {
+            bail!("remote URLs are expected to be in the format of https://domain.com/owner/repo.git");
+        }
+
         Ok(Self {
             host: remote_url.host().context("remote has no host")?.to_owned(),
             port: remote_url.port_or_known_default().context("remote has no port")?,
@@ -154,5 +159,35 @@ impl Remote {
 
         reviews.sort_by_key(|r| r.submitted_at);
         Ok(reviews)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_remote() -> Result<(), anyhow::Error> {
+        let remote = "https://github.com/sapcc/pear-reviewer.git";
+        let result = Remote::parse(remote)?;
+        assert_eq!(result.host, url::Host::Domain("github.com"));
+        assert_eq!(result.owner, "sapcc");
+        assert_eq!(result.repository, "pear-reviewer");
+        assert_eq!(result.original, remote);
+        Ok(())
+    }
+
+    #[test]
+    fn parse_remote_invalid() {
+        let result = Remote::parse("https://sapcc/pear-reviewer.git");
+        match result {
+            Err(err) => {
+                assert_eq!(
+                    err.to_string(),
+                    "remote URLs are expected to be in the format of https://domain.com/owner/repo.git"
+                );
+            },
+            Ok(_) => todo!(),
+        }
     }
 }
