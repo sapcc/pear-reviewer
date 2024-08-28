@@ -13,10 +13,9 @@
 // limitations under the License.
 
 use anyhow::{anyhow, Context};
-use octocrab::models::commits::Commit;
 use tokio::task::JoinSet;
 
-use crate::github::Review;
+use crate::github::{Commit, Review};
 use crate::remote::Remote;
 
 #[derive(Clone, Debug)]
@@ -30,10 +29,10 @@ pub struct RepoChangeset {
 
 impl RepoChangeset {
     pub async fn analyze_commits(mut self) -> Result<Self, anyhow::Error> {
-        let compare = self.remote.compare(&self.base_commit, &self.head_commit).await?;
+        let compare_commits = self.remote.compare(&self.base_commit, &self.head_commit).await?;
 
         let mut join_set = JoinSet::new();
-        for commit in compare.commits {
+        for commit in compare_commits {
             join_set.spawn(self.clone().analyze_commit(commit));
         }
 
@@ -145,7 +144,6 @@ pub struct CommitMetadata {
 impl CommitMetadata {
     pub fn new(commit: &Commit) -> Self {
         let headline = commit
-            .commit
             .message
             .split('\n')
             .next()
@@ -193,11 +191,11 @@ mod tests {
                     user: "user2".to_owned(),
                 },
                 Review {
-                  approved: false,
-                  commit_id: "00000000000000000000000000000003".to_owned(),
-                  submitted_at: 3,
-                  user: "user3".to_owned(),
-              },
+                    approved: false,
+                    commit_id: "00000000000000000000000000000003".to_owned(),
+                    submitted_at: 3,
+                    user: "user3".to_owned(),
+                },
             ],
         )
     }
@@ -205,14 +203,14 @@ mod tests {
     #[test]
     fn collect_approved_reviews() {
         let (mut changeset, pr_reviews) = gen_change_review();
-        changeset.collect_approved_reviews(&pr_reviews, &"00000000000000000000000000000002".to_string());
+        changeset.collect_approved_reviews(&pr_reviews, &"00000000000000000000000000000002".to_owned());
         assert_eq!(changeset.approvals, vec!["user2"]);
     }
 
     #[test]
     fn collect_approved_reviews_extra_commit() {
         let (mut changeset, pr_reviews) = gen_change_review();
-        changeset.collect_approved_reviews(&pr_reviews, &"00000000000000000000000000000003".to_string());
+        changeset.collect_approved_reviews(&pr_reviews, &"00000000000000000000000000000003".to_owned());
         assert_eq!(changeset.approvals, Vec::<String>::new());
     }
 }

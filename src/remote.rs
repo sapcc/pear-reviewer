@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use anyhow::{anyhow, bail, Context};
 use octocrab::commits::PullRequestTarget;
-use octocrab::models::commits::CommitComparison;
 use octocrab::models::pulls::{PullRequest, ReviewState};
 use octocrab::models::repos::RepoCommit;
 use octocrab::Octocrab;
@@ -24,6 +23,7 @@ use tokio::sync::SemaphorePermit;
 use url::Url;
 
 use crate::api_clients::Client;
+use crate::github::Commit;
 use crate::github::Review;
 
 #[derive(Clone, Debug)]
@@ -80,10 +80,10 @@ impl Remote {
         Ok(associated_prs_page.take_items())
     }
 
-    pub async fn compare(&self, base_commit: &str, head_commit: &str) -> Result<CommitComparison, anyhow::Error> {
+    pub async fn compare(&self, base_commit: &str, head_commit: &str) -> Result<Vec<Commit>, anyhow::Error> {
         let (_permit, octocrab) = self.get_client().await?;
 
-        octocrab
+        let compare = octocrab
             .commits(&self.owner, &self.repository)
             .compare(base_commit, head_commit)
             .send()
@@ -93,7 +93,18 @@ impl Remote {
                 self.original.trim_end_matches(".git"),
                 &base_commit,
                 &head_commit
-            ))
+            ))?;
+
+        let mut commits: Vec<Commit> = vec![];
+        for commit in compare.commits {
+            commits.push(Commit {
+              html_url: commit.html_url,
+              message: commit.commit.message,
+              sha: commit.sha,
+            });
+        }
+
+        Ok(commits)
     }
 
     pub async fn pr_head_hash(&self, pr_number: u64) -> Result<String, anyhow::Error> {

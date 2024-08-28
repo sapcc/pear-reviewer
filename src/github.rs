@@ -13,6 +13,13 @@
 // limitations under the License.
 
 #[derive(Clone, Debug)]
+pub struct Commit {
+  pub html_url: String,
+  pub message: String,
+  pub sha: String,
+}
+
+#[derive(Clone, Debug)]
 pub struct Review {
     pub approved: bool,
     pub commit_id: String,
