@@ -19,16 +19,7 @@ in mkShell {
   ];
 
   buildInputs =  [
-    # https://github.com/NixOS/nixpkgs/pull/317275
-    (libgit2.overrideAttrs (oldAttrs: rec {
-      version = "1.8.1";
-      src = fetchFromGitHub {
-        owner = "libgit2";
-        repo = "libgit2";
-        rev = "v${version}";
-        hash = "sha256-J2rCxTecyLbbDdsyBWn9w7r3pbKRMkI9E7RvRgAqBdY=";
-      };
-    }))
+    libgit2
     openssl
   ];
 
