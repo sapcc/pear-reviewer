@@ -323,7 +323,6 @@ impl<C: Client> ClientSet<C> {
     }
 }
 
-// TODO: add test
 fn get_env_name_api_endpoint_for_host(host: &str) -> (String, String) {
     let mut env_name = "GITHUB_TOKEN".to_string();
     let mut api_endpoint = "https://api.github.com".to_string();
@@ -337,4 +336,20 @@ fn get_env_name_api_endpoint_for_host(host: &str) -> (String, String) {
     };
 
     (env_name, api_endpoint)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::api_clients;
+
+    #[test]
+    fn get_env_name_api_endpoint_for_host() {
+        let (env_name, api_endpoint) = api_clients::get_env_name_api_endpoint_for_host("github.com");
+        assert_eq!(env_name, "GITHUB_TOKEN");
+        assert_eq!(api_endpoint, "https://api.github.com");
+
+        let (env_name, api_endpoint) = api_clients::get_env_name_api_endpoint_for_host("github.example.com");
+        assert_eq!(env_name, "GITHUB_EXAMPLE_COM_TOKEN");
+        assert_eq!(api_endpoint, "https://github.example.com/api/v3");
+    }
 }
