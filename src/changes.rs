@@ -221,12 +221,17 @@ mod tests {
         assert_eq!(changeset.approvals, Vec::<String>::new());
     }
 
-    #[tokio::test]
-    async fn analyze_commit() {
+    fn get_mock_remote() -> Remote<MockClient> {
         let mut api_clients = ClientSet::new();
         let mut remote = Remote::<MockClient>::parse("https://github.com/example/project.git").unwrap();
         api_clients.fill(&mut remote).unwrap();
 
+        remote
+    }
+
+    #[tokio::test]
+    async fn analyze_commit_approved() {
+        let mut remote = get_mock_remote();
         let remote_client = (&mut remote.client).as_ref().unwrap();
 
         remote_client
@@ -238,14 +243,26 @@ mod tests {
                 url: "https://github.com/example/project/pulls/1".to_owned(),
             }]);
 
-        remote_client.pr_reviews.lock().unwrap().insert(1, vec![Review {
-            approved: true,
-            commit_id: "00000000000000000000000000000002".to_owned(),
-            submitted_at: 42,
-            user: "user1".to_owned(),
-        }]);
+        remote_client.pr_reviews.lock().unwrap().insert(1, vec![
+            Review {
+                approved: false,
+                commit_id: "00000000000000000000000000000001".to_owned(),
+                submitted_at: 42,
+                user: "user1".to_owned(),
+            },
+            Review {
+                approved: true,
+                commit_id: "00000000000000000000000000000002".to_owned(),
+                submitted_at: 42,
+                user: "user1".to_owned(),
+            },
+        ]);
 
-        remote_client.pr_head_hash.lock().unwrap().insert(1, "00000000000000000000000000000002".to_owned());
+        remote_client
+            .pr_head_hash
+            .lock()
+            .unwrap()
+            .insert(1, "00000000000000000000000000000002".to_owned());
 
         let changeset = RepoChangeset::analyze_commit(remote.into(), Commit {
             html_url: "https://github.com/example/project/commit/00000000000000000000000000000002".to_owned(),
@@ -255,6 +272,7 @@ mod tests {
         .await
         .unwrap();
 
+        assert_eq!(changeset.len(), 1);
         assert_eq!(changeset[0], Changeset {
             approvals: vec!["user1".to_owned()],
             commits: vec![CommitMetadata {
@@ -262,6 +280,52 @@ mod tests {
                 link: "https://github.com/example/project/commit/00000000000000000000000000000002".to_owned(),
             }],
             pr_link: Some("https://github.com/example/project/pulls/1".to_owned()),
+        });
+    }
+
+    #[tokio::test]
+    async fn analyze_commit_none() {
+        let mut remote = get_mock_remote();
+        let remote_client = (&mut remote.client).as_ref().unwrap();
+
+        remote_client
+            .associated_prs
+            .lock()
+            .unwrap()
+            .insert("00000000000000000000000000000002".to_string(), vec![PullRequest {
+                number: 1,
+                url: "https://github.com/example/project/pulls/2".to_owned(),
+            }]);
+
+        remote_client.pr_reviews.lock().unwrap().insert(1, vec![Review {
+            approved: false,
+            commit_id: "00000000000000000000000000000001".to_owned(),
+            submitted_at: 42,
+            user: "user1".to_owned(),
+        }]);
+
+        remote_client
+            .pr_head_hash
+            .lock()
+            .unwrap()
+            .insert(1, "00000000000000000000000000000003".to_owned());
+
+        let changeset = RepoChangeset::analyze_commit(remote.into(), Commit {
+            html_url: "https://github.com/example/project/commit/00000000000000000000000000000002".to_owned(),
+            message: "Testing test".to_owned(),
+            sha: "00000000000000000000000000000002".to_owned(),
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(changeset.len(), 1);
+        assert_eq!(changeset[0], Changeset {
+            approvals: vec![],
+            commits: vec![CommitMetadata {
+                headline: "Testing test".to_owned(),
+                link: "https://github.com/example/project/commit/00000000000000000000000000000002".to_owned(),
+            }],
+            pr_link: Some("https://github.com/example/project/pulls/2".to_owned()),
         });
     }
 }
