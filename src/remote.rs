@@ -62,17 +62,11 @@ impl<C: Client> Remote<C> {
         self.client
             .as_ref()
             .ok_or_else(|| anyhow!("no client attached to remote"))?
-            .compare(
-                &self.owner,
-                &self.repository,
-                &self.original,
-                base_commit,
-                head_commit,
-            )
+            .compare(&self.owner, &self.repository, &self.original, base_commit, head_commit)
             .await
     }
 
-    pub async fn pr_head_hash(&self,  pr_number: u64) -> Result<String, anyhow::Error> {
+    pub async fn pr_head_hash(&self, pr_number: u64) -> Result<String, anyhow::Error> {
         self.client
             .as_ref()
             .ok_or_else(|| anyhow!("no client attached to remote"))?
@@ -91,9 +85,8 @@ impl<C: Client> Remote<C> {
 
 #[cfg(test)]
 mod tests {
-    use crate::api_clients::RealClient;
-
     use super::*;
+    use crate::api_clients::RealClient;
 
     #[test]
     fn parse_remote() -> Result<(), anyhow::Error> {
