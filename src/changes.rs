@@ -67,7 +67,6 @@ impl<C: Client + Sync + Send + 'static> RepoChangeset<C> {
         Ok(self)
     }
 
-    // TODO: add test
     async fn analyze_commit(remote: Arc<Remote<C>>, commit: Commit) -> anyhow::Result<Vec<Changeset>> {
         let change_commit = CommitMetadata::new(&commit);
         let mut changes = vec![];
