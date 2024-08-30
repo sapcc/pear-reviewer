@@ -25,7 +25,7 @@ use std::str;
 use std::sync::LazyLock;
 
 use anyhow::{anyhow, Context};
-use api_clients::ClientSet;
+use api_clients::{ClientSet, RealClient};
 use changes::RepoChangeset;
 use clap::builder::styling::Style;
 use clap::{Parser, Subcommand};
@@ -135,7 +135,11 @@ async fn main() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-fn find_values_yaml(workspace: String, base: &str, head: &str) -> Result<Vec<RepoChangeset>, anyhow::Error> {
+fn find_values_yaml(
+    workspace: String,
+    base: &str,
+    head: &str,
+) -> Result<Vec<RepoChangeset<RealClient>>, anyhow::Error> {
     let repo = Repository::open(workspace).context("failed to open repository")?;
 
     let base_tree = repo::tree_for_commit_ref(&repo, base)?;
@@ -144,7 +148,7 @@ fn find_values_yaml(workspace: String, base: &str, head: &str) -> Result<Vec<Rep
         .diff_tree_to_tree(Some(&head_tree), Some(&base_tree), None)
         .with_context(|| format!("cannot diff trees {} and {}", base_tree.id(), head_tree.id()))?;
 
-    let mut changes = Vec::<RepoChangeset>::new();
+    let mut changes = Vec::<RepoChangeset<RealClient>>::new();
 
     for diff_delta in diff_tree.deltas() {
         let new_file = diff_delta.new_file();
@@ -166,14 +170,15 @@ fn find_values_yaml(workspace: String, base: &str, head: &str) -> Result<Vec<Rep
         let old_image_refs = ImageRefs::parse(&repo, &old_file)?;
         for (name, image) in &new_image_refs.container_images {
             for source in &image.sources {
-                changes.push(RepoChangeset {
-                    name: name.clone(),
-                    remote: remote::Remote::parse(&source.repo)?,
-                    // TODO: iterate over sources
-                    base_commit: source.commit.clone(),
-                    head_commit: old_image_refs.container_images[name].sources[0].commit.clone(),
-                    changes: Vec::new(),
-                });
+                for container_image_source in &old_image_refs.container_images[name].sources {
+                    changes.push(RepoChangeset {
+                        name: name.clone(),
+                        remote: remote::Remote::parse(&source.repo)?,
+                        base_commit: source.commit.clone(),
+                        head_commit: container_image_source.commit.clone(),
+                        changes: Vec::new(),
+                    });
+                }
             }
         }
     }
@@ -181,8 +186,8 @@ fn find_values_yaml(workspace: String, base: &str, head: &str) -> Result<Vec<Rep
     Ok(changes)
 }
 
-fn print_changes(changes: &[RepoChangeset]) -> Result<(), anyhow::Error> {
-    for change in changes {
+fn print_changes(repo_changeset: &[RepoChangeset<RealClient>]) -> Result<(), anyhow::Error> {
+    for change in repo_changeset {
         println!(
             "Name {} from {} moved from {} to {}",
             change.name, change.remote.original, change.base_commit, change.head_commit

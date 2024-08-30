@@ -12,88 +12,95 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use anyhow::{anyhow, Context};
+use std::sync::Arc;
+
+use anyhow::Context;
 use tokio::task::JoinSet;
 
+use crate::api_clients::Client;
 use crate::github::{Commit, Review};
 use crate::remote::Remote;
 
-#[derive(Clone, Debug)]
-pub struct RepoChangeset {
+#[derive(Debug)]
+pub struct RepoChangeset<C: Client> {
     pub name: String,
-    pub remote: Remote,
+    pub remote: Remote<C>,
     pub base_commit: String,
     pub head_commit: String,
     pub changes: Vec<Changeset>,
 }
 
-impl RepoChangeset {
-    pub async fn analyze_commits(mut self) -> Result<Self, anyhow::Error> {
+impl<C: Client + Sync + Send + 'static> RepoChangeset<C> {
+    pub async fn analyze_commits(mut self) -> anyhow::Result<Self> {
         let compare_commits = self.remote.compare(&self.base_commit, &self.head_commit).await?;
 
         let mut join_set = JoinSet::new();
+        let remote = Arc::new(self.remote);
         for commit in compare_commits {
-            join_set.spawn(self.clone().analyze_commit(commit));
+            join_set.spawn(Self::analyze_commit(remote.clone(), commit));
         }
 
+        let mut changesets: Vec<Changeset> = vec![];
         while let Some(res) = join_set.join_next().await {
             let changes = res?.context("while collecting change")?;
-            for change in changes {
-                self.changes.push(change);
+            for change in &changes {
+                changesets.push(change.clone());
             }
         }
 
+        for change in &changesets {
+            if let Some(self_change) = self
+                .changes
+                .iter_mut()
+                .find(|self_change| self_change.pr_link == change.pr_link)
+            {
+                for approval in &change.approvals {
+                    self_change.approvals.push(approval.clone());
+                }
+                continue;
+            }
+
+            self.changes.push(change.clone());
+        }
+
+        self.remote = Arc::into_inner(remote).unwrap();
         Ok(self)
     }
 
     // TODO: add test
-    async fn analyze_commit(mut self, commit: Commit) -> Result<Vec<Changeset>, anyhow::Error> {
+    async fn analyze_commit(remote: Arc<Remote<C>>, commit: Commit) -> anyhow::Result<Vec<Changeset>> {
         let change_commit = CommitMetadata::new(&commit);
+        let mut changes = vec![];
 
-        let associated_prs = self.remote.associated_prs(commit.sha.clone()).await?;
+        let associated_prs = remote.associated_prs(commit.sha.clone()).await?;
         if associated_prs.is_empty() {
-            self.changes.push(Changeset {
+            changes.push(Changeset {
                 commits: vec![change_commit],
                 pr_link: None,
                 approvals: Vec::new(),
             });
-            return Ok(self.changes);
+            return Ok(changes);
         }
 
         for associated_pr in &associated_prs {
-            let pr_reviews = self.remote.pr_reviews(associated_pr.number).await?;
-
-            let associated_pr_link = Some(
-                associated_pr
-                    .html_url
-                    .as_ref()
-                    .ok_or_else(|| anyhow!("pr without an html link!?"))?
-                    .to_string(),
-            );
-
-            let head_sha = self.remote.pr_head_hash(associated_pr.number).await?;
-
-            if let Some(changeset) = self.changes.iter_mut().find(|cs| cs.pr_link == associated_pr_link) {
-                changeset.commits.push(change_commit.clone());
-                changeset.collect_approved_reviews(&pr_reviews, &head_sha);
-                continue;
-            }
-
             let mut changeset = Changeset {
                 commits: vec![change_commit.clone()],
-                pr_link: associated_pr_link,
+                pr_link: Some(associated_pr.url.clone()),
                 approvals: Vec::new(),
             };
 
+            let pr_reviews = remote.pr_reviews(associated_pr.number).await?;
+            let head_sha = remote.pr_head_hash(associated_pr.number).await?;
             changeset.collect_approved_reviews(&pr_reviews, &head_sha);
-            self.changes.push(changeset);
+
+            changes.push(changeset);
         }
 
-        Ok(self.changes)
+        Ok(changes)
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Changeset {
     pub commits: Vec<CommitMetadata>,
     pub pr_link: Option<String>,
@@ -102,7 +109,6 @@ pub struct Changeset {
 
 impl Changeset {
     // pr_reviews must be sorted by key submitted_at!
-    // TODO: add test
     pub fn collect_approved_reviews(&mut self, pr_reviews: &[Review], head_sha: &String) {
         let mut last_review_by: Vec<String> = vec![];
 
@@ -135,7 +141,7 @@ impl Changeset {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct CommitMetadata {
     pub headline: String,
     pub link: String,
@@ -159,7 +165,8 @@ impl CommitMetadata {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::github::Review;
+    use crate::api_clients::{ClientSet, MockClient};
+    use crate::github::{PullRequest, Review};
 
     fn gen_change_review() -> (Changeset, Vec<Review>) {
         (
@@ -212,5 +219,49 @@ mod tests {
         let (mut changeset, pr_reviews) = gen_change_review();
         changeset.collect_approved_reviews(&pr_reviews, &"00000000000000000000000000000003".to_owned());
         assert_eq!(changeset.approvals, Vec::<String>::new());
+    }
+
+    #[tokio::test]
+    async fn analyze_commit() {
+        let mut api_clients = ClientSet::new();
+        let mut remote = Remote::<MockClient>::parse("https://github.com/example/project.git").unwrap();
+        api_clients.fill(&mut remote).unwrap();
+
+        let remote_client = (&mut remote.client).as_ref().unwrap();
+
+        remote_client
+            .associated_prs
+            .lock()
+            .unwrap()
+            .insert("00000000000000000000000000000002".to_string(), vec![PullRequest {
+                number: 1,
+                url: "https://github.com/example/project/pulls/1".to_owned(),
+            }]);
+
+        remote_client.pr_reviews.lock().unwrap().insert(1, vec![Review {
+            approved: true,
+            commit_id: "00000000000000000000000000000002".to_owned(),
+            submitted_at: 42,
+            user: "user1".to_owned(),
+        }]);
+
+        remote_client.pr_head_hash.lock().unwrap().insert(1, "00000000000000000000000000000002".to_owned());
+
+        let changeset = RepoChangeset::analyze_commit(remote.into(), Commit {
+            html_url: "https://github.com/example/project/commit/00000000000000000000000000000002".to_owned(),
+            message: "Testing test".to_owned(),
+            sha: "00000000000000000000000000000002".to_owned(),
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(changeset[0], Changeset {
+            approvals: vec!["user1".to_owned()],
+            commits: vec![CommitMetadata {
+                headline: "Testing test".to_owned(),
+                link: "https://github.com/example/project/commit/00000000000000000000000000000002".to_owned(),
+            }],
+            pr_link: Some("https://github.com/example/project/pulls/1".to_owned()),
+        });
     }
 }
