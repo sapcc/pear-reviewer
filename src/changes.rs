@@ -230,8 +230,8 @@ mod tests {
 
     #[tokio::test]
     async fn analyze_commit_approved() {
-        let mut remote = get_mock_remote();
-        let remote_client = (&mut remote.client).as_ref().unwrap();
+        let remote = get_mock_remote();
+        let remote_client = remote.client.as_ref().unwrap();
 
         remote_client
             .associated_prs
@@ -284,8 +284,8 @@ mod tests {
 
     #[tokio::test]
     async fn analyze_commit_none() {
-        let mut remote = get_mock_remote();
-        let remote_client = (&mut remote.client).as_ref().unwrap();
+        let remote = get_mock_remote();
+        let remote_client = remote.client.as_ref().unwrap();
 
         remote_client
             .associated_prs
