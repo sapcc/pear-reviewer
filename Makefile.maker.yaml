@@ -1,0 +1,16 @@
+# Configuration file for <https://github.com/sapcc/go-makefile-maker>
+
+metadata:
+  url: https://github.com/sapcc/pear-reviewer
+
+githubWorkflow:
+  global:
+    defaultBranch: master
+  pushContainerToGhcr:
+    enabled: true
+    tagStrategy: [ edge ]
+
+renovate:
+  enabled: true
+  assignees:
+    - SuperSandro2000
