@@ -7,7 +7,7 @@ name: Container Registry GHCR
 "on":
   push:
     branches:
-      - main
+      - master
   workflow_dispatch: {}
 permissions:
   contents: read
