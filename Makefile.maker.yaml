@@ -5,7 +5,7 @@ metadata:
 
 githubWorkflow:
   global:
-    defaultBranch: master
+    defaultBranch: main
   pushContainerToGhcr:
     enabled: true
     tagStrategy: [ edge ]
