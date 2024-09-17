@@ -1,0 +1,42 @@
+name: 'pear-reviewer'
+description: 'Run pear-reviewer'
+runs:
+  using: "composite"
+  steps:
+    - name: Check out code
+      uses: actions/checkout@v4
+
+    - name: Run pear-reviewer
+      id: run-pear-reviewer
+      uses: docker://ghcr.io/sapcc/pear-reviewer:latest
+      run:
+        pear-reviewer > $GITHUB_OUTPUT
+
+    - name: Find Comment
+      uses: peter-evans/find-comment@v3
+      id: find-comment
+      with:
+        issue-number: ${{ github.event.pull_request.number }}
+        comment-author: 'github-actions[bot]'
+        body-includes: <!-- written by pear-reviewer -->
+
+    - name: Create comment
+      if: steps.find-comment.outputs.comment-id == ''
+      uses: peter-evans/create-or-update-comment@v4
+      with:
+        issue-number: ${{ github.event.pull_request.number }}
+        body: |
+            <!-- written by pear-reviewer -->
+
+            ${{ steps.run-pear-rewiwer.outputs.comment }}
+
+    - name: Update comment
+      if: steps.find-comment.outputs.comment-id != ''
+      uses: peter-evans/create-or-update-comment@v4
+      with:
+        comment-id: ${{ steps.find-comment.outputs.comment-id }}
+        body: |
+            <!-- written by pear-reviewer -->
+
+            ${{ steps.run-pear-rewiwer.outputs.result }}
+        edit-mode: replace
