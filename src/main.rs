@@ -21,8 +21,10 @@ mod helm_config;
 mod remote;
 mod repo;
 
-use std::str;
+use std::fs::File;
+use std::io::Write;
 use std::sync::LazyLock;
+use std::{env, str};
 
 use anyhow::{anyhow, Context};
 use api_clients::{ClientSet, RealClient};
@@ -186,14 +188,26 @@ fn find_values_yaml(
     Ok(changes)
 }
 
+fn println_or_redirect(line: String) -> Result<(), anyhow::Error> {
+    if env::var("GITHUB_ACTIONS").is_ok() {
+        let path = env::var("GITHUB_OUTPUT").context("cannot find GITHUB_OUTPUT")?;
+        let mut file = File::create(path.clone()).with_context(|| format!("cannot write to $GITHUB_OUTPUT {path}"))?;
+        file.write_all((line + "\n").as_bytes())?;
+    } else {
+        println!("{line}");
+    }
+
+    Ok(())
+}
+
 fn print_changes(repo_changeset: &[RepoChangeset<RealClient>]) -> Result<(), anyhow::Error> {
     for change in repo_changeset {
-        println!(
+        println_or_redirect(format!(
             "Name {} from {} moved from {} to {}",
-            change.name, change.remote.original, change.base_commit, change.head_commit
-        );
-        println!("| Commit link | Pull Request link | Approvals | Reviewer's verdict |");
-        println!("|-------------|-------------------|-----------|--------------------|");
+            change.name, change.remote.original, change.base_commit, change.head_commit,
+        ))?;
+        println_or_redirect("| Commit link | Pull Request link | Approvals | Reviewer's verdict |".to_string())?;
+        println_or_redirect("|-------------|-------------------|-----------|--------------------|".to_string())?;
         for commit_change in &change.changes {
             let mut commit_links: Vec<String> = vec![];
             for commit in &commit_change.commits {
@@ -208,7 +222,7 @@ fn print_changes(repo_changeset: &[RepoChangeset<RealClient>]) -> Result<(), any
             }
 
             let pr_link = commit_change.pr_link.clone();
-            println!(
+            println_or_redirect(format!(
                 "| {} | {} | {} | <enter your decision> |",
                 commit_links.join(" ,<br>"),
                 match pr_link {
@@ -226,7 +240,7 @@ fn print_changes(repo_changeset: &[RepoChangeset<RealClient>]) -> Result<(), any
                     None => String::new(),
                 },
                 commit_change.approvals.join(", "),
-            );
+            ))?;
         }
     }
 
