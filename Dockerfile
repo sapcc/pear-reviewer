@@ -20,6 +20,10 @@ RUN cargo install --locked --path /src --root /pkg \
 
 FROM alpine:3.20
 
+# guessed based on https://github.com/catthehacker/docker_images/blob/master/linux/ubuntu/scripts/runner.sh#L6-L12
+RUN addgroup -g 1001 runner \
+  && adduser -h /home/runner -s /bin/bash -G runner -D -u 1001 runner
+
 # upgrade all installed packages to fix potential CVEs in advance
 # also remove apk package manager to hopefully remove dependency on OpenSSL 🤞
 RUN apk upgrade --no-cache --no-progress \
@@ -30,4 +34,5 @@ COPY --from=builder /pkg/bin/pear-reviewer /usr/bin/pear-reviewer
 # make sure the binary can be executed
 RUN pear-reviewer --version 2>/dev/null
 
+USER runner
 ENTRYPOINT [ "/usr/bin/pear-reviewer" ]
