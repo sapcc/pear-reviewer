@@ -15,19 +15,21 @@ Program to simplify PCI double approval process across repositories
 pear-reviewer can be used as a GitHub Actions workflow to comment the review template on PRs.
 
 ```yaml
-name: pear-reviewer
-on:
+name: Pear Reviewer
+"on":
   pull_request:
     branches:
       - '*'
-
-permissions:
-  pull-requests: write
+    paths:
+      - 'helm-charts/**'
 
 jobs:
   review:
     name: Review
     runs-on: ubuntu-latest
     steps:
-      - uses: sapcc/pear-reviewer@main
+      - name: Check out code
+        uses: actions/checkout@v4
+      - name: Run Pear Reviewer
+        uses: sapcc/pear-reviewer@master
 ```
