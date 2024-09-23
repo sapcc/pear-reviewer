@@ -9,8 +9,7 @@ edition = "2021"
 anyhow = "^1"
 clap = { version = "^4", features = ["derive", "env"] }
 git2 = "^0"
-# change back to crates.io after https://github.com/XAMPPRocky/octocrab/pull/680 got released
-octocrab = { version = "^0", git = "https://github.com/SuperSandro2000/octocrab.git", branch = "pr_commits" }
+octocrab = "^0"
 serde = "^1"
 serde_yml = "^0"
 tokio = { version = "^1", features = ["macros", "rt-multi-thread"] }

@@ -172,6 +172,8 @@ impl Client for RealClient {
             .octocrab
             .pulls(owner, repo)
             .pr_commits(pr_number)
+            .page(250u32)
+            .send()
             .await
             .context("failed to get pr commits")?;
         assert!(
