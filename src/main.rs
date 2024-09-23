@@ -144,8 +144,8 @@ fn find_values_yaml(
 ) -> Result<Vec<RepoChangeset<RealClient>>, anyhow::Error> {
     let repo = Repository::open(workspace).context("failed to open repository")?;
 
-    let base_tree = repo::tree_for_commit_ref(&repo, base)?;
-    let head_tree = repo::tree_for_commit_ref(&repo, head)?;
+    let base_tree = repo::tree_for_commit_ref(&repo, base).context("while parsing base")?;
+    let head_tree = repo::tree_for_commit_ref(&repo, head).context("while parsing head")?;
     let diff_tree = repo
         .diff_tree_to_tree(Some(&head_tree), Some(&base_tree), None)
         .with_context(|| format!("cannot diff trees {} and {}", base_tree.id(), head_tree.id()))?;
