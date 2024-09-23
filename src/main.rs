@@ -30,6 +30,7 @@ use anyhow::{anyhow, Context};
 use api_clients::{ClientSet, RealClient};
 use changes::RepoChangeset;
 use clap::builder::styling::Style;
+use clap::builder::NonEmptyStringValueParser;
 use clap::{Parser, Subcommand};
 use git2::Repository;
 use helm_config::ImageRefs;
@@ -57,6 +58,7 @@ struct Cli {
         env = "GITHUB_BASE_REF",
         hide_env_values = true,
         required = false,
+        value_parser = NonEmptyStringValueParser::new(),
         global = true
     )]
     base: String,
@@ -68,6 +70,7 @@ struct Cli {
         env = "GITHUB_HEAD_REF",
         hide_env_values = true,
         required = false,
+        value_parser = NonEmptyStringValueParser::new(),
         global = true
     )]
     head: String,
