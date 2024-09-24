@@ -150,7 +150,7 @@ fn find_values_yaml(
     let base_tree = repo::tree_for_commit_ref(&repo, base).context("while parsing base")?;
     let head_tree = repo::tree_for_commit_ref(&repo, head).context("while parsing head")?;
     let diff_tree = repo
-        .diff_tree_to_tree(Some(&head_tree), Some(&base_tree), None)
+        .diff_tree_to_tree(Some(&base_tree), Some(&head_tree), None)
         .with_context(|| format!("cannot diff trees {} and {}", base_tree.id(), head_tree.id()))?;
 
     let mut changes = Vec::<RepoChangeset<RealClient>>::new();
