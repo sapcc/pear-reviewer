@@ -171,8 +171,8 @@ fn find_values_yaml(
             continue;
         }
 
-        let new_image_refs = ImageRefs::parse(&repo, &new_file)?;
-        let old_image_refs = ImageRefs::parse(&repo, &old_file)?;
+        let new_image_refs = ImageRefs::parse(&repo, &new_file).context("while parsing new file")?;
+        let old_image_refs = ImageRefs::parse(&repo, &old_file).context("while parsing old file")?;
         for (name, image) in &new_image_refs.container_images {
             for source in &image.sources {
                 for container_image_source in &old_image_refs.container_images[name].sources {
