@@ -21,6 +21,7 @@ mod helm_config;
 mod remote;
 mod repo;
 
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
 use std::sync::LazyLock;
@@ -32,7 +33,7 @@ use changes::RepoChangeset;
 use clap::builder::styling::Style;
 use clap::builder::NonEmptyStringValueParser;
 use clap::{Parser, Subcommand};
-use git2::Repository;
+use git2::{Oid, Repository};
 use helm_config::ImageRefs;
 use remote::Remote;
 use tokio::task::JoinSet;
@@ -157,32 +158,52 @@ fn find_values_yaml(
 
     for diff_delta in diff_tree.deltas() {
         let new_file = diff_delta.new_file();
-        if !new_file.exists() {
-            continue;
-        }
-
         let path = new_file.path().ok_or_else(|| anyhow!("failed to get file path"))?;
         if !path.ends_with("images.yaml") {
             continue;
         }
 
+        let new_image_refs = ImageRefs::parse(&repo, &new_file).context("while parsing new file")?;
+
         let old_file = diff_delta.old_file();
-        if !old_file.exists() {
-            continue;
+        let mut old_image_refs = ImageRefs {
+            container_images: HashMap::new(),
+        };
+        // only zeros means the file was newly created and there is no old file to parse
+        if old_file.id() != Oid::from_str("0000000000000000000000000000000000000000")? {
+            old_image_refs = ImageRefs::parse(&repo, &old_file).context("while parsing old file")?;
         }
 
-        let new_image_refs = ImageRefs::parse(&repo, &new_file).context("while parsing new file")?;
-        let old_image_refs = ImageRefs::parse(&repo, &old_file).context("while parsing old file")?;
         for (name, image) in &new_image_refs.container_images {
-            for source in &image.sources {
-                for container_image_source in &old_image_refs.container_images[name].sources {
-                    changes.push(RepoChangeset {
-                        name: name.clone(),
-                        remote: remote::Remote::parse(&source.repo)?,
-                        base_commit: source.commit.clone(),
-                        head_commit: container_image_source.commit.clone(),
-                        changes: Vec::new(),
-                    });
+            for new_source in &image.sources {
+                // Is this a new container image?
+                if !old_image_refs.container_images.contains_key(name) {
+                    changes.push(RepoChangeset::new(
+                        name.clone(),
+                        remote::Remote::parse(&new_source.repo)?,
+                        new_source.commit.clone(),
+                        String::new(),
+                    ));
+                    continue;
+                }
+
+                for old_source in &old_image_refs.container_images[name].sources {
+                    // Did we previously have this source?
+                    if new_source.repo == old_source.repo {
+                        changes.push(RepoChangeset::new(
+                            name.clone(),
+                            remote::Remote::parse(&new_source.repo)?,
+                            new_source.commit.clone(),
+                            old_source.commit.clone(),
+                        ));
+                    } else {
+                        changes.push(RepoChangeset::new(
+                            name.clone(),
+                            remote::Remote::parse(&new_source.repo)?,
+                            new_source.commit.clone(),
+                            String::new(),
+                        ));
+                    }
                 }
             }
         }
