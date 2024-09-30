@@ -160,7 +160,7 @@ impl Client for RealClient {
             .await
             .context("failed to get pr commits")?
             .last()
-            .ok_or_else(|| anyhow!("PR contains no commits?"))?
+            .ok_or_else(|| anyhow!("PR {owner}/{repo}/pull/{pr_number} contains no commits?"))?
             .sha
             .clone())
     }
