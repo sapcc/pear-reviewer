@@ -111,7 +111,7 @@ async fn main() -> Result<(), anyhow::Error> {
             let repo = RepoChangeset {
                 name: remote.repository.clone(),
                 remote,
-                base_commit: cli.base,
+                base_commit: Some(cli.base),
                 head_commit: cli.head,
                 changes: Vec::new(),
             };
@@ -181,8 +181,8 @@ fn find_values_yaml(
                     changes.push(RepoChangeset::new(
                         name.clone(),
                         remote::Remote::parse(&new_source.repo)?,
+                        None,
                         new_source.commit.clone(),
-                        String::new(),
                     ));
                     continue;
                 }
@@ -193,15 +193,15 @@ fn find_values_yaml(
                         changes.push(RepoChangeset::new(
                             name.clone(),
                             remote::Remote::parse(&new_source.repo)?,
+                            Some(old_source.commit.clone()),
                             new_source.commit.clone(),
-                            old_source.commit.clone(),
                         ));
                     } else {
                         changes.push(RepoChangeset::new(
                             name.clone(),
                             remote::Remote::parse(&new_source.repo)?,
+                            None,
                             new_source.commit.clone(),
-                            String::new(),
                         ));
                     }
                 }
@@ -228,7 +228,10 @@ fn print_changes(repo_changeset: &[RepoChangeset<RealClient>]) -> Result<(), any
     for change in repo_changeset {
         println_or_redirect(format!(
             "Name {} from {} moved from {} to {}",
-            change.name, change.remote.original, change.base_commit, change.head_commit,
+            change.name,
+            change.remote.original,
+            change.base_commit.as_deref().unwrap_or(""),
+            change.head_commit,
         ))?;
         println_or_redirect("| Commit link | Pull Request link | Approvals | Reviewer's verdict |".to_string())?;
         println_or_redirect("|-------------|-------------------|-----------|--------------------|".to_string())?;
