@@ -8,9 +8,9 @@ edition = "2021"
 [dependencies]
 anyhow = "^1"
 clap = { version = "^4", features = ["derive", "env"] }
-git2 = "^0"
+git2 = { version = "^0", default-features = false, features = ["https"] }
 octocrab = "^0"
 serde = "^1"
 serde_yml = "^0"
 tokio = { version = "^1", features = ["macros", "rt-multi-thread"] }
-url = "^2"
+url = { version = "^2", features = ["std"] }
