@@ -17,7 +17,6 @@ allow = [
   "Unlicense",
 ]
 confidence-threshold = 1.0
-exceptions = [{ crate = "unicode-ident", allow = ["Unicode-DFS-2016"] }]
 clarify = [
   # see https://github.com/briansmith/ring/blob/main/LICENSE for details
   { crate = "ring", expression = "MIT AND ISC AND OpenSSL", license-files = [
