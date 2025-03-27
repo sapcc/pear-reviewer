@@ -25,14 +25,40 @@ use crate::remote::Remote;
 pub struct RepoChangeset<C: Client> {
     pub name: String,
     pub remote: Remote<C>,
-    pub base_commit: String,
+    pub base_commit: Option<String>,
     pub head_commit: String,
     pub changes: Vec<Changeset>,
 }
 
+impl<C: Client> RepoChangeset<C> {
+    pub fn new(
+        name: String,
+        remote: crate::Remote<C>,
+        base_commit: Option<String>,
+        head_commit: String,
+    ) -> RepoChangeset<C> {
+        Self {
+            name,
+            remote,
+            base_commit,
+            head_commit,
+            changes: Vec::new(),
+        }
+    }
+}
+
 impl<C: Client + Sync + Send + 'static> RepoChangeset<C> {
     pub async fn analyze_commits(mut self) -> anyhow::Result<Self> {
-        let compare_commits = self.remote.compare(&self.base_commit, &self.head_commit).await?;
+        // if this is a newly introduced source, compare the commit to itself
+        if self.base_commit.is_none() {
+            self.base_commit = Some(self.head_commit.clone());
+            self.head_commit += "^1";
+        }
+
+        let compare_commits = self
+            .remote
+            .compare(self.base_commit.as_deref().unwrap_or(""), &self.head_commit)
+            .await?;
 
         let mut join_set = JoinSet::new();
         let remote = Arc::new(self.remote);
