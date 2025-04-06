@@ -335,7 +335,7 @@ fn get_env_name_api_endpoint_for_host(host: &str) -> (String, String) {
             "GITHUB_{}_TOKEN",
             host.replace('.', "_").to_uppercase().trim_start_matches("GITHUB_")
         );
-    };
+    }
 
     (env_name, api_endpoint)
 }
