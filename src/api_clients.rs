@@ -269,8 +269,7 @@ impl Client for MockClient {
             .lock()
             .unwrap()
             .get(&pr_number)
-            .ok_or_else(|| anyhow!("MockClient pr_head_hash contains no {}", pr_number))?
-            .to_string())
+            .ok_or_else(|| anyhow!("MockClient pr_head_hash contains no {}", pr_number))?.clone())
     }
 
     async fn pr_commits(&self, _owner: &str, _repo: &str, pr_number: u64) -> anyhow::Result<Vec<RepoCommit>> {
