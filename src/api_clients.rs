@@ -160,7 +160,7 @@ impl Client for RealClient {
             .await
             .context("failed to get pr commits")?
             .last()
-            .ok_or_else(|| anyhow!("PR contains no commits?"))?
+            .ok_or_else(|| anyhow!("PR {owner}/{repo}/pull/{pr_number} contains no commits?"))?
             .sha
             .clone())
     }
@@ -172,7 +172,8 @@ impl Client for RealClient {
             .octocrab
             .pulls(owner, repo)
             .pr_commits(pr_number)
-            .page(250u32)
+            .per_page(250)
+            .page(1u32)
             .send()
             .await
             .context("failed to get pr commits")?;
